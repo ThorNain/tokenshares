@@ -1,12 +1,13 @@
 // ============================================================================
 // Schéma de données — TokenShares (prototype de démonstration).
 //
-// Provider : SQLite, pour permettre `npm install && npm run dev` sans aucune
-// infrastructure. SQLite ne supporte ni les enums Prisma ni le type Decimal :
-// les statuts sont des String validés par Zod + unions TypeScript
-// (src/lib/status.ts) et les montants des Float (acceptable pour un prototype).
-// La variante production PostgreSQL — avec enums natifs et Decimal — est
-// fournie dans prisma/schema.postgres.prisma.
+// Provider : PostgreSQL (Neon), utilisé en local ET en production pour éviter
+// la dérive de schéma entre les deux environnements. Les statuts restent des
+// String validés par Zod + unions TypeScript (src/lib/status.ts) et les
+// montants des Float : ce schéma privilégie la simplicité et la compatibilité
+// SQLite historique plutôt que les enums natifs/Decimal de
+// prisma/schema.postgres.prisma (migration recommandée avant tout usage avec
+// de l'argent réel — voir la checklist du README).
 // ============================================================================
 
 generator client {
@@ -14,8 +15,13 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooler transactionnel (Supabase/Supavisor, port 6543) : utilisé à
+  // l'exécution par Prisma Client — compatible serverless (Vercel).
+  url       = env("DATABASE_URL")
+  // Pooler session (port 5432) : utilisé par `prisma db push`/`migrate` car
+  // le mode transactionnel ne supporte pas les requêtes préparées des DDL.
+  directUrl = env("DIRECT_URL")
 }
 
 // --- Utilisateurs & wallets --------------------------------------------------

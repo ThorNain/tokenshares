@@ -27,3 +27,6 @@ contracts/typechain-types/
 # Divers
 .DS_Store
 *.log
+
+.vercel
+.env*
