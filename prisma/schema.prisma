@@ -1,0 +1,421 @@
+// ============================================================================
+// Schéma de données — TokenShares (prototype de démonstration).
+//
+// Provider : SQLite, pour permettre `npm install && npm run dev` sans aucune
+// infrastructure. SQLite ne supporte ni les enums Prisma ni le type Decimal :
+// les statuts sont des String validés par Zod + unions TypeScript
+// (src/lib/status.ts) et les montants des Float (acceptable pour un prototype).
+// La variante production PostgreSQL — avec enums natifs et Decimal — est
+// fournie dans prisma/schema.postgres.prisma.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// --- Utilisateurs & wallets --------------------------------------------------
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  firstName   String?
+  lastName    String?
+  // Identifiant Privy (did:privy:...) lorsque l'authentification Privy est active.
+  privyUserId String?  @unique
+  // "customer" | "admin" — voir src/lib/status.ts
+  role        String   @default("customer")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  wallets Wallet[]
+  orders  Order[]
+
+  @@index([createdAt])
+}
+
+model Wallet {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Adresse publique uniquement. AUCUNE clé privée, AUCUNE seed phrase
+  // n'est jamais stockée où que ce soit dans cette application.
+  address String
+  chainId Int    @default(84532)
+  // "privy" | "demo"
+  provider  String   @default("demo")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([address, chainId])
+  @@index([userId])
+}
+
+// --- Catalogue ---------------------------------------------------------------
+
+model Asset {
+  id        String  @id @default(cuid())
+  ticker    String  @unique
+  name      String
+  // "SP500" | "CAC40" | "NIKKEI225"
+  indexName String
+  country   String
+  currency  String
+  // Prix de base utilisé par le fournisseur de prix simulé.
+  basePrice Float
+  initials  String
+  // Objet de collection (« totem ») expédié avec la commande : visuel emoji,
+  // description et photo produit optionnelle (fichier sous /public, ex.
+  // "/totems/aapl.webp" — priorité : photo > emoji > initiales).
+  totemEmoji String?
+  totemName  String?
+  totemImage String?
+  // Identifiant du token ERC-1155 associé à cet actif.
+  tokenId   Int     @unique
+  active    Boolean @default(true)
+  // Marge spécifique (ex : 0.10). Null = marge globale (Setting margin_rate).
+  marginRateOverride Float?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  prices        MarketPrice[]
+  orderItems    OrderItem[]
+  hedgingOrders HedgingOrder[]
+  tokenMints    TokenMint[]
+
+  @@index([indexName])
+  @@index([active])
+}
+
+// Instantanés de prix (historique + prix figé à la commande).
+model MarketPrice {
+  id       String   @id @default(cuid())
+  assetId  String
+  asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  price    Float
+  currency String
+  // "mock" | nom du futur fournisseur de données
+  source    String   @default("mock")
+  asOf      DateTime
+  createdAt DateTime @default(now())
+
+  @@index([assetId, asOf])
+}
+
+// --- Commandes ---------------------------------------------------------------
+
+model Order {
+  id       String @id @default(cuid())
+  // Identifiant public court, affiché au client (ex : ORD-8F3K2A).
+  publicId String @unique
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  // created | pending_payment | paid | hedge_simulated | mint_pending |
+  // minted | shipping_pending | shipped | delivered | failed | refunded |
+  // cancelled — voir src/lib/status.ts
+  status String @default("created")
+
+  currency       String
+  // Somme des (prix de marché figé × quantité).
+  subtotalAmount Float
+  marginRate     Float
+  marginAmount   Float
+  totalAmount    Float
+
+  needsReview  Boolean   @default(false)
+  internalNote String?
+  paidAt       DateTime?
+  refundedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  items           OrderItem[]
+  shippingAddress ShippingAddress?
+  payment         Payment?
+  hedgingOrder    HedgingOrder?
+  tokenMint       TokenMint?
+  physicalItem    PhysicalItem?
+  qrCodes         QrCode[]
+  transactions    BlockchainTransaction[]
+  auditLogs       AuditLog[]
+  errorLogs       ErrorLog[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id])
+
+  quantity Int
+  // Prix de marché indicatif figé au moment de la commande.
+  lockedMarketPrice Float
+  // Prix de vente unitaire = lockedMarketPrice × (1 + marginRate).
+  unitSellingPrice Float
+  marginAmount     Float
+  currency         String
+  priceLockedAt    DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([assetId])
+}
+
+model ShippingAddress {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  firstName  String
+  lastName   String
+  line1      String
+  line2      String?
+  postalCode String
+  city       String
+  country    String
+  phone      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// --- Paiement ----------------------------------------------------------------
+
+model Payment {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // "stripe" | "mock"
+  provider String
+  // pending | processing | succeeded | failed | refunded
+  status String @default("pending")
+
+  amount   Float
+  currency String
+  // Montant réellement encaissé (renseigné par le webhook).
+  amountReceived Float?
+  method         String?
+
+  stripeSessionId       String? @unique
+  stripePaymentIntentId String?
+  // Le webhook signé a-t-il été vérifié avec succès ?
+  webhookVerified Boolean @default(false)
+
+  paidAt     DateTime?
+  refundedAt DateTime?
+  failureMessage String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// Journal des événements webhook reçus — clé d'idempotence anti double
+// traitement (un même événement Stripe ne déclenche jamais deux émissions).
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  provider   String
+  externalId String   @unique
+  type       String
+  orderId    String?
+  processedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+// --- Couverture simulée (achat d'action chez un courtier) ---------------------
+
+model HedgingOrder {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id])
+
+  ticker          String
+  quantity        Int
+  referencePrice  Float
+  currency        String
+  notionalAmount  Float
+  // not_started | pending | processing | simulated_filled | failed | cancelled
+  status String @default("not_started")
+  // "mock-broker" — remplacé plus tard par la référence du courtier réglementé.
+  provider  String  @default("mock-broker")
+  brokerRef String?
+  attempts  Int     @default(0)
+  lastError String?
+  executedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// --- Émission du token -------------------------------------------------------
+
+model TokenMint {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id])
+
+  tokenId         Int
+  contractAddress String
+  network         String
+  quantity        Int
+  // Wallet public de destination (wallet Privy de l'utilisateur).
+  toAddress String
+  // not_started | queued | minting | mint_submitted | mint_confirmed |
+  // transfer_pending | transfer_submitted | transfer_confirmed | failed | cancelled
+  status String @default("not_started")
+
+  txHash        String?
+  blockNumber   Int?
+  confirmations Int     @default(0)
+  feeWei        String?
+  attempts      Int     @default(0)
+  lastError     String?
+  submittedAt   DateTime?
+  confirmedAt   DateTime?
+  // Clé d'idempotence dérivée de l'identifiant de commande : garantit
+  // qu'un même paiement ne provoque jamais deux émissions.
+  idempotencyKey String @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  transactions BlockchainTransaction[]
+
+  @@index([status])
+}
+
+model BlockchainTransaction {
+  id          String     @id @default(cuid())
+  orderId     String?
+  order       Order?     @relation(fields: [orderId], references: [id])
+  tokenMintId String?
+  tokenMint   TokenMint? @relation(fields: [tokenMintId], references: [id])
+
+  // "mint" | "transfer"
+  type        String
+  network     String
+  fromAddress String
+  toAddress   String
+  tokenId     Int?
+  quantity    Int?
+  txHash      String? @unique
+  blockNumber Int?
+  // pending | submitted | confirmed | failed
+  status        String @default("pending")
+  confirmations Int    @default(0)
+  feeWei        String?
+  error         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  confirmedAt   DateTime?
+
+  @@index([status])
+  @@index([orderId])
+}
+
+// --- Objet physique & QR code -------------------------------------------------
+
+model PhysicalItem {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // "miniature_car" pour le MVP.
+  kind String @default("miniature_car")
+  // not_started | preparing | ready | shipped | delivered
+  status              String    @default("not_started")
+  carrier             String?
+  trackingNumber      String?
+  shippedAt           DateTime?
+  estimatedDeliveryAt DateTime?
+  deliveredAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model QrCode {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Jeton public aléatoire (URL /claim/{publicToken}). Ne contient JAMAIS de
+  // clé privée, seed phrase, mot de passe, session ni donnée personnelle.
+  publicToken String    @unique
+  active      Boolean   @default(true)
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([orderId])
+}
+
+// --- Journalisation ------------------------------------------------------------
+
+model AuditLog {
+  id String @id @default(cuid())
+  // "user" | "admin" | "system"
+  actorType  String
+  actorId    String?
+  actorEmail String?
+  action     String
+  entityType String
+  entityId   String
+  orderId    String?
+  order      Order?  @relation(fields: [orderId], references: [id])
+  oldValue   String?
+  newValue   String?
+  justification String?
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model ErrorLog {
+  id String @id @default(cuid())
+  // "privy" | "stripe" | "database" | "market-data" | "broker" | "mint" |
+  // "blockchain" | "qrcode" | "shipping"
+  service String
+  type    String
+  // info | warning | error | critical
+  severity         String  @default("error")
+  message          String
+  technicalMessage String?
+  orderId          String?
+  order            Order?  @relation(fields: [orderId], references: [id])
+  userId           String?
+  attempts         Int     @default(0)
+  lastAttemptAt    DateTime?
+  nextAttemptAt    DateTime?
+  resolved         Boolean   @default(false)
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([service])
+  @@index([severity])
+  @@index([resolved])
+}
+
+// --- Paramètres globaux ---------------------------------------------------------
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

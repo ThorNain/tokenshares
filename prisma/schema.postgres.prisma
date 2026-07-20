@@ -1,0 +1,427 @@
+// ============================================================================
+// Variante PRODUCTION du schéma — PostgreSQL (Neon, Supabase, RDS…).
+// Identique à schema.prisma mais avec enums natifs et Decimal pour les
+// montants. Pour l'utiliser :
+//   1. remplacer le contenu de schema.prisma par ce fichier ;
+//   2. DATABASE_URL="postgresql://user:pass@host:5432/db" ;
+//   3. npx prisma migrate dev --name init
+// Les unions TypeScript de src/lib/status.ts correspondent 1:1 à ces enums.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  customer
+  admin
+}
+
+enum WalletProviderKind {
+  privy
+  demo
+}
+
+enum MarketIndex {
+  SP500
+  CAC40
+  NIKKEI225
+}
+
+enum OrderStatus {
+  created
+  pending_payment
+  paid
+  hedge_simulated
+  mint_pending
+  minted
+  shipping_pending
+  shipped
+  delivered
+  failed
+  refunded
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  processing
+  succeeded
+  failed
+  refunded
+}
+
+enum HedgingStatus {
+  not_started
+  pending
+  processing
+  simulated_filled
+  failed
+  cancelled
+}
+
+enum MintStatus {
+  not_started
+  queued
+  minting
+  mint_submitted
+  mint_confirmed
+  transfer_pending
+  transfer_submitted
+  transfer_confirmed
+  failed
+  cancelled
+}
+
+enum TxStatus {
+  pending
+  submitted
+  confirmed
+  failed
+}
+
+enum PhysicalItemStatus {
+  not_started
+  preparing
+  ready
+  shipped
+  delivered
+}
+
+enum ErrorSeverity {
+  info
+  warning
+  error
+  critical
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  firstName   String?
+  lastName    String?
+  privyUserId String?  @unique
+  role        UserRole @default(customer)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  wallets Wallet[]
+  orders  Order[]
+
+  @@index([createdAt])
+}
+
+model Wallet {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address   String
+  chainId   Int                @default(84532)
+  provider  WalletProviderKind @default(demo)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([address, chainId])
+  @@index([userId])
+}
+
+model Asset {
+  id                 String      @id @default(cuid())
+  ticker             String      @unique
+  name               String
+  indexName          MarketIndex
+  country            String
+  currency           String
+  basePrice          Decimal     @db.Decimal(18, 4)
+  initials           String
+  totemEmoji         String?
+  totemName          String?
+  totemImage         String?
+  tokenId            Int         @unique
+  active             Boolean     @default(true)
+  marginRateOverride Decimal?    @db.Decimal(6, 4)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  prices        MarketPrice[]
+  orderItems    OrderItem[]
+  hedgingOrders HedgingOrder[]
+  tokenMints    TokenMint[]
+
+  @@index([indexName])
+  @@index([active])
+}
+
+model MarketPrice {
+  id        String   @id @default(cuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  price     Decimal  @db.Decimal(18, 4)
+  currency  String
+  source    String   @default("mock")
+  asOf      DateTime
+  createdAt DateTime @default(now())
+
+  @@index([assetId, asOf])
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  publicId       String      @unique
+  userId         String
+  user           User        @relation(fields: [userId], references: [id])
+  status         OrderStatus @default(created)
+  currency       String
+  subtotalAmount Decimal     @db.Decimal(18, 2)
+  marginRate     Decimal     @db.Decimal(6, 4)
+  marginAmount   Decimal     @db.Decimal(18, 2)
+  totalAmount    Decimal     @db.Decimal(18, 2)
+  needsReview    Boolean     @default(false)
+  internalNote   String?
+  paidAt         DateTime?
+  refundedAt     DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  items           OrderItem[]
+  shippingAddress ShippingAddress?
+  payment         Payment?
+  hedgingOrder    HedgingOrder?
+  tokenMint       TokenMint?
+  physicalItem    PhysicalItem?
+  qrCodes         QrCode[]
+  transactions    BlockchainTransaction[]
+  auditLogs       AuditLog[]
+  errorLogs       ErrorLog[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id                String   @id @default(cuid())
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  assetId           String
+  asset             Asset    @relation(fields: [assetId], references: [id])
+  quantity          Int
+  lockedMarketPrice Decimal  @db.Decimal(18, 4)
+  unitSellingPrice  Decimal  @db.Decimal(18, 2)
+  marginAmount      Decimal  @db.Decimal(18, 2)
+  currency          String
+  priceLockedAt     DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([assetId])
+}
+
+model ShippingAddress {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  firstName  String
+  lastName   String
+  line1      String
+  line2      String?
+  postalCode String
+  city       String
+  country    String
+  phone      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  orderId               String        @unique
+  order                 Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider              String
+  status                PaymentStatus @default(pending)
+  amount                Decimal       @db.Decimal(18, 2)
+  currency              String
+  amountReceived        Decimal?      @db.Decimal(18, 2)
+  method                String?
+  stripeSessionId       String?       @unique
+  stripePaymentIntentId String?
+  webhookVerified       Boolean       @default(false)
+  paidAt                DateTime?
+  refundedAt            DateTime?
+  failureMessage        String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  externalId  String   @unique
+  type        String
+  orderId     String?
+  processedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+model HedgingOrder {
+  id             String        @id @default(cuid())
+  orderId        String        @unique
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  assetId        String
+  asset          Asset         @relation(fields: [assetId], references: [id])
+  ticker         String
+  quantity       Int
+  referencePrice Decimal       @db.Decimal(18, 4)
+  currency       String
+  notionalAmount Decimal       @db.Decimal(18, 2)
+  status         HedgingStatus @default(not_started)
+  provider       String        @default("mock-broker")
+  brokerRef      String?
+  attempts       Int           @default(0)
+  lastError      String?
+  executedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model TokenMint {
+  id              String     @id @default(cuid())
+  orderId         String     @unique
+  order           Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  assetId         String
+  asset           Asset      @relation(fields: [assetId], references: [id])
+  tokenId         Int
+  contractAddress String
+  network         String
+  quantity        Int
+  toAddress       String
+  status          MintStatus @default(not_started)
+  txHash          String?
+  blockNumber     Int?
+  confirmations   Int        @default(0)
+  feeWei          String?
+  attempts        Int        @default(0)
+  lastError       String?
+  submittedAt     DateTime?
+  confirmedAt     DateTime?
+  idempotencyKey  String     @unique
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  transactions BlockchainTransaction[]
+
+  @@index([status])
+}
+
+model BlockchainTransaction {
+  id            String     @id @default(cuid())
+  orderId       String?
+  order         Order?     @relation(fields: [orderId], references: [id])
+  tokenMintId   String?
+  tokenMint     TokenMint? @relation(fields: [tokenMintId], references: [id])
+  type          String
+  network       String
+  fromAddress   String
+  toAddress     String
+  tokenId       Int?
+  quantity      Int?
+  txHash        String?    @unique
+  blockNumber   Int?
+  status        TxStatus   @default(pending)
+  confirmations Int        @default(0)
+  feeWei        String?
+  error         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  confirmedAt   DateTime?
+
+  @@index([status])
+  @@index([orderId])
+}
+
+model PhysicalItem {
+  id                  String             @id @default(cuid())
+  orderId             String             @unique
+  order               Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kind                String             @default("miniature_car")
+  status              PhysicalItemStatus @default(not_started)
+  carrier             String?
+  trackingNumber      String?
+  shippedAt           DateTime?
+  estimatedDeliveryAt DateTime?
+  deliveredAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model QrCode {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  publicToken String    @unique
+  active      Boolean   @default(true)
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([orderId])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  actorType     String
+  actorId       String?
+  actorEmail    String?
+  action        String
+  entityType    String
+  entityId      String
+  orderId       String?
+  order         Order?   @relation(fields: [orderId], references: [id])
+  oldValue      String?
+  newValue      String?
+  justification String?
+  createdAt     DateTime @default(now())
+
+  @@index([orderId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model ErrorLog {
+  id               String        @id @default(cuid())
+  service          String
+  type             String
+  severity         ErrorSeverity @default(error)
+  message          String
+  technicalMessage String?
+  orderId          String?
+  order            Order?        @relation(fields: [orderId], references: [id])
+  userId           String?
+  attempts         Int           @default(0)
+  lastAttemptAt    DateTime?
+  nextAttemptAt    DateTime?
+  resolved         Boolean       @default(false)
+  resolvedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([service])
+  @@index([severity])
+  @@index([resolved])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
