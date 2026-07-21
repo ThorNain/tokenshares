@@ -13,6 +13,7 @@ import { buildOrderTimeline } from "@/lib/timeline";
 import { qrPngDataUrl } from "@/lib/qr";
 import { OrderTimeline } from "@/components/order-timeline";
 import { AdminActionButton } from "@/components/admin/action-button";
+import { PriceActionButton } from "@/components/admin/price-action-button";
 import { Card, Badge, Alert, TableWrap, Table, TH, TD } from "@/components/ui";
 import {
   OrderStatusBadge,
@@ -104,6 +105,16 @@ export default async function AdminOrderDetailPage({ params }: { params: { order
           statut, justification).
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
+          {hedging?.status === "pending" ? (
+            <PriceActionButton
+              endpoint={`/api/admin/orders/${order.id}/actions`}
+              action="confirm_hedge_price"
+              label="Confirmer le prix d'achat"
+              title="Prix réel d'achat de l'action"
+              helpText="Saisissez le prix unitaire réellement obtenu chez le courtier. La couverture sera validée puis le token émis automatiquement."
+              currency={order.currency}
+            />
+          ) : null}
           {hedging?.status === "failed" || (payment?.status === "succeeded" && !hedging) ? (
             <AdminActionButton orderId={order.id} action="retry_hedging" label="Relancer la couverture" confirmText="Relancer l'achat simulé de couverture pour cette commande ?" />
           ) : null}

@@ -38,8 +38,9 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  wallets Wallet[]
-  orders  Order[]
+  wallets    Wallet[]
+  orders     Order[]
+  sellOrders SellOrder[]
 
   @@index([createdAt])
 }
@@ -92,6 +93,7 @@ model Asset {
   orderItems    OrderItem[]
   hedgingOrders HedgingOrder[]
   tokenMints    TokenMint[]
+  sellOrders    SellOrder[]
 
   @@index([indexName])
   @@index([active])
@@ -254,15 +256,64 @@ model HedgingOrder {
   notionalAmount  Float
   // not_started | pending | processing | simulated_filled | failed | cancelled
   status String @default("not_started")
-  // "mock-broker" — remplacé plus tard par la référence du courtier réglementé.
+  // "mock-broker" | "manual" — remplacé plus tard par le courtier réglementé.
   provider  String  @default("mock-broker")
   brokerRef String?
+  // Prix réel d'exécution saisi par l'opérateur (mode courtier manuel).
+  executedPrice Float?
   attempts  Int     @default(0)
   lastError String?
   executedAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  @@index([status])
+}
+
+// --- Ordre de vente (rachat de l'action + destruction du token) --------------
+// Parcours symétrique à l'achat : le détenteur demande la revente, l'opérateur
+// vend l'action réelle chez le courtier et saisit le prix obtenu, puis le token
+// est détruit (burn) on-chain — il « disparaît » du wallet.
+model SellOrder {
+  id       String @id @default(cuid())
+  publicId String @unique
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  assetId  String
+  asset    Asset  @relation(fields: [assetId], references: [id])
+
+  ticker        String
+  quantity      Int
+  // Adresse du wallet depuis lequel les tokens seront détruits.
+  walletAddress String
+  // Prix indicatif au moment de la demande.
+  referencePrice Float
+  currency       String
+  // pending_broker | sold_pending_burn | burning | completed | failed | cancelled
+  status String @default("pending_broker")
+
+  provider  String  @default("mock-broker")
+  brokerRef String?
+  // Prix réel de vente saisi par l'opérateur + produit net correspondant.
+  executedPrice  Float?
+  proceedsAmount Float?
+  executedAt     DateTime?
+
+  // Transaction de destruction (burn) du token.
+  burnTxHash        String?
+  burnBlockNumber   Int?
+  burnConfirmations Int     @default(0)
+  burnFeeWei        String?
+
+  // Clé d'idempotence du burn (garantit une seule destruction par ordre).
+  idempotencyKey String @unique
+  attempts       Int    @default(0)
+  lastError      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([assetId])
   @@index([status])
 }
 

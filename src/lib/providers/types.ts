@@ -41,8 +41,22 @@ export interface BuyAssetParams {
   currency: string;
 }
 
+export interface SellAssetParams {
+  sellOrderId: string;
+  ticker: string;
+  quantity: number;
+  referencePrice: number;
+  currency: string;
+}
+
 export interface BrokerOrderResult {
   ok: boolean;
+  /**
+   * true = l'ordre a été enregistré mais attend une exécution MANUELLE chez
+   * le courtier réel (l'opérateur saisira le prix obtenu ensuite). false /
+   * absent = ordre exécuté immédiatement (courtier simulé).
+   */
+  pending?: boolean;
   brokerRef?: string;
   executedAt?: Date;
   executedPrice?: number;
@@ -51,7 +65,10 @@ export interface BrokerOrderResult {
 
 export interface BrokerProvider {
   readonly name: string;
+  /** Achète l'action de couverture (immédiat en simulation, différé en manuel). */
   buyAsset(params: BuyAssetParams): Promise<BrokerOrderResult>;
+  /** Vend l'action de couverture lors d'une revente du token. */
+  sellAsset(params: SellAssetParams): Promise<BrokerOrderResult>;
 }
 
 // --- Paiement ----------------------------------------------------------------------
@@ -115,6 +132,20 @@ export interface MintResult {
   error?: string;
 }
 
+export interface BurnParams {
+  /** Clé d'idempotence (dérivée de l'identifiant d'ordre de vente). */
+  idempotencyKey: string;
+  tokenId: number;
+  quantity: number;
+  /** Adresse publique du wallet depuis lequel détruire les tokens. */
+  fromAddress: string;
+  /** Force un échec simulé (tests de gestion d'erreurs). */
+  simulateFailure?: boolean;
+}
+
+/** Le résultat d'un burn a la même forme qu'un mint. */
+export type BurnResult = MintResult;
+
 export interface BlockchainProvider {
   readonly name: string;
   readonly network: string;
@@ -122,6 +153,8 @@ export interface BlockchainProvider {
   readonly minterAddress: string;
   /** Émet `quantity` tokens ERC-1155 `tokenId` directement vers `toAddress`. */
   mintTo(params: MintParams): Promise<MintResult>;
+  /** Détruit `quantity` tokens ERC-1155 `tokenId` depuis `fromAddress` (vente). */
+  burnFrom(params: BurnParams): Promise<BurnResult>;
 }
 
 // --- Livraison -------------------------------------------------------------------------

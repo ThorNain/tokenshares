@@ -21,12 +21,18 @@ import {
   refundOrder,
   cancelPendingOperation,
   markPaymentSucceeded,
+  confirmHedgePrice,
   FulfillmentError,
 } from "@/lib/fulfillment";
 import { logError, safeErrorMessage } from "@/lib/error-log";
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("retry_hedging"), justification: z.string().max(500).optional() }),
+  z.object({
+    action: z.literal("confirm_hedge_price"),
+    executedPrice: z.number().positive().max(10_000_000),
+    justification: z.string().max(500).optional(),
+  }),
   z.object({ action: z.literal("retry_mint"), justification: z.string().max(500).optional() }),
   z.object({ action: z.literal("start_mint"), justification: z.string().max(500).optional() }),
   z.object({ action: z.literal("simulate_payment"), justification: z.string().max(500).optional() }),
@@ -101,6 +107,21 @@ export async function POST(request: Request, { params }: { params: { orderId: st
         const result = await runHedging(order.id, actor);
         if (!result.ok) {
           return NextResponse.json({ error: result.error ?? "Échec de la couverture." }, { status: 502 });
+        }
+        break;
+      }
+
+      case "confirm_hedge_price": {
+        const result = await confirmHedgePrice({
+          orderId: order.id,
+          executedPrice: input.executedPrice,
+          actor,
+        });
+        if (!result.ok) {
+          return NextResponse.json(
+            { error: result.error ?? "Échec après confirmation du prix." },
+            { status: 502 },
+          );
         }
         break;
       }

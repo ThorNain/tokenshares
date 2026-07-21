@@ -5,9 +5,10 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { getPortfolio } from "@/lib/portfolio";
+import { getPortfolio, getSellableQuantity } from "@/lib/portfolio";
 import { isRealChain } from "@/lib/providers/blockchain";
 import { Card, Badge, TableWrap, Table, TH, TD, Alert } from "@/components/ui";
+import { SellButton } from "@/components/sell-button";
 import { formatMoney, formatPercent, explorerAddressUrl, shortHex, CHAIN_NAME } from "@/lib/utils";
 import { IconExternal, IconWallet } from "@/components/icons";
 
@@ -22,6 +23,15 @@ export default async function PortfolioPage() {
     prisma.wallet.findFirst({ where: { userId: session.userId } }),
   ]);
   const realChain = isRealChain();
+  // Quantité réellement vendable par actif (détenu − déjà engagé en vente).
+  const sellableByAsset = new Map<string, number>(
+    await Promise.all(
+      portfolio.positions.map(
+        async (p) =>
+          [p.assetId, await getSellableQuantity(session.userId, p.assetId)] as [string, number],
+      ),
+    ),
+  );
 
   return (
     <div className="space-y-8">
@@ -101,6 +111,7 @@ export default async function PortfolioPage() {
                 <TH className="text-right">Prix indicatif actuel</TH>
                 <TH className="text-right">Valeur indicative</TH>
                 <TH className="text-right">Variation</TH>
+                <TH className="text-right">Action</TH>
               </tr>
             </thead>
             <tbody>
@@ -125,6 +136,15 @@ export default async function PortfolioPage() {
                       {p.changeSincePurchase >= 0 ? "▲" : "▼"}{" "}
                       {formatPercent(Math.abs(p.changeSincePurchase), 2)}
                     </Badge>
+                  </TD>
+                  <TD className="text-right">
+                    <SellButton
+                      assetId={p.assetId}
+                      ticker={p.ticker}
+                      sellableQuantity={sellableByAsset.get(p.assetId) ?? 0}
+                      currentPrice={p.currentPrice}
+                      currency={p.currency}
+                    />
                   </TD>
                 </tr>
               ))}

@@ -103,3 +103,30 @@ export async function getPortfolio(userId: string): Promise<PortfolioSummary> {
     totals: Array.from(totalsMap.entries()).map(([currency, t]) => ({ currency, ...t })),
   };
 }
+
+/**
+ * Quantité de tokens d'un actif que l'utilisateur peut encore vendre :
+ * total émis et confirmé, moins ce qui est déjà engagé dans une vente
+ * (en cours ou finalisée). Empêche de vendre deux fois les mêmes tokens.
+ */
+export async function getSellableQuantity(userId: string, assetId: string): Promise<number> {
+  const [minted, sold] = await Promise.all([
+    prisma.tokenMint.aggregate({
+      where: {
+        assetId,
+        status: "transfer_confirmed",
+        order: { userId, status: { in: TOKEN_HELD_STATUSES } },
+      },
+      _sum: { quantity: true },
+    }),
+    prisma.sellOrder.aggregate({
+      where: {
+        userId,
+        assetId,
+        status: { in: ["pending_broker", "sold_pending_burn", "burning", "completed"] },
+      },
+      _sum: { quantity: true },
+    }),
+  ]);
+  return (minted._sum.quantity ?? 0) - (sold._sum.quantity ?? 0);
+}

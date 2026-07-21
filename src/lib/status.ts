@@ -106,6 +106,41 @@ export const HEDGING_STATUS_TONES: Record<HedgingStatus, BadgeTone> = {
   cancelled: "neutral",
 };
 
+// --- Ordre de vente (rachat + destruction du token) ---------------------------
+
+export const SELL_STATUSES = [
+  "pending_broker",
+  "sold_pending_burn",
+  "burning",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
+export type SellStatus = (typeof SELL_STATUSES)[number];
+
+export const SELL_STATUS_LABELS: Record<SellStatus, string> = {
+  pending_broker: "Vente courtier en attente",
+  sold_pending_burn: "Vendu — token à détruire",
+  burning: "Destruction en cours",
+  completed: "Vente finalisée",
+  failed: "Échouée",
+  cancelled: "Annulée",
+};
+
+export const SELL_STATUS_TONES: Record<SellStatus, BadgeTone> = {
+  pending_broker: "pending",
+  sold_pending_burn: "warning",
+  burning: "pending",
+  completed: "success",
+  failed: "danger",
+  cancelled: "neutral",
+};
+
+export function asSellStatus(value: string): SellStatus {
+  if ((SELL_STATUSES as readonly string[]).includes(value)) return value as SellStatus;
+  return "pending_broker";
+}
+
 // --- Émission du token --------------------------------------------------------------
 
 export const MINT_STATUSES = [

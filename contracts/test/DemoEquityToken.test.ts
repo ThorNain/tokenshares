@@ -47,4 +47,34 @@ describe("DemoEquityToken", () => {
     const { contract } = await deploy();
     expect(await contract.DISCLAIMER()).to.contain("not a share");
   });
+
+  it("détruit des tokens depuis le wallet du client (vente) et met à jour la supply", async () => {
+    const { contract, user } = await deploy();
+    await contract.mint(user.address, 3, 5, "0x");
+    await contract.burnFrom(user.address, 3, 2);
+    expect(await contract.balanceOf(user.address, 3)).to.equal(3n);
+    expect(await contract["totalSupply(uint256)"](3)).to.equal(3n);
+  });
+
+  it("refuse le burn sans MINTER_ROLE", async () => {
+    const { contract, attacker, user } = await deploy();
+    await contract.mint(user.address, 3, 2, "0x");
+    await expect(
+      contract.connect(attacker).burnFrom(user.address, 3, 1),
+    ).to.be.revertedWithCustomError(contract, "AccessControlUnauthorizedAccount");
+  });
+
+  it("refuse un burn de quantité nulle", async () => {
+    const { contract, user } = await deploy();
+    await contract.mint(user.address, 3, 2, "0x");
+    await expect(contract.burnFrom(user.address, 3, 0)).to.be.revertedWith(
+      "DemoEquityToken: amount is zero",
+    );
+  });
+
+  it("refuse de brûler plus que le solde détenu", async () => {
+    const { contract, user } = await deploy();
+    await contract.mint(user.address, 3, 1, "0x");
+    await expect(contract.burnFrom(user.address, 3, 2)).to.be.reverted;
+  });
 });

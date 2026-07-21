@@ -10,10 +10,17 @@ import { createPublicClient, createWalletClient, http, parseAbi, type Chain } fr
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia, sepolia } from "viem/chains";
 import { env } from "@/lib/env";
-import type { BlockchainProvider, MintParams, MintResult } from "@/lib/providers/types";
+import type {
+  BlockchainProvider,
+  MintParams,
+  MintResult,
+  BurnParams,
+  BurnResult,
+} from "@/lib/providers/types";
 
-const MINT_ABI = parseAbi([
+const CONTRACT_ABI = parseAbi([
   "function mint(address to, uint256 id, uint256 amount, bytes data) external",
+  "function burnFrom(address from, uint256 id, uint256 amount) external",
 ]);
 
 function resolveChain(chainId: number): Chain {
@@ -52,10 +59,34 @@ export class ViemBlockchainProvider implements BlockchainProvider {
   }
 
   async mintTo(params: MintParams): Promise<MintResult> {
+    if (params.simulateFailure) {
+      return { ok: false, error: "Échec simulé demandé (DEMO_FAIL_MINT_TICKERS)." };
+    }
+    return this.sendAndWait("mint", [
+      params.toAddress as `0x${string}`,
+      BigInt(params.tokenId),
+      BigInt(params.quantity),
+      "0x",
+    ]);
+  }
+
+  async burnFrom(params: BurnParams): Promise<BurnResult> {
+    if (params.simulateFailure) {
+      return { ok: false, error: "Échec simulé demandé." };
+    }
+    return this.sendAndWait("burnFrom", [
+      params.fromAddress as `0x${string}`,
+      BigInt(params.tokenId),
+      BigInt(params.quantity),
+    ]);
+  }
+
+  /** Soumet un appel de contrat et attend une confirmation. */
+  private async sendAndWait(
+    functionName: "mint" | "burnFrom",
+    args: readonly unknown[],
+  ): Promise<MintResult> {
     try {
-      if (params.simulateFailure) {
-        return { ok: false, error: "Échec simulé demandé (DEMO_FAIL_MINT_TICKERS)." };
-      }
       const walletClient = createWalletClient({
         account: this.account,
         chain: this.chain,
@@ -68,14 +99,9 @@ export class ViemBlockchainProvider implements BlockchainProvider {
 
       const txHash = await walletClient.writeContract({
         address: this.contractAddress as `0x${string}`,
-        abi: MINT_ABI,
-        functionName: "mint",
-        args: [
-          params.toAddress as `0x${string}`,
-          BigInt(params.tokenId),
-          BigInt(params.quantity),
-          "0x",
-        ],
+        abi: CONTRACT_ABI,
+        functionName,
+        args: args as never,
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({

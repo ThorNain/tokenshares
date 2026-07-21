@@ -34,6 +34,7 @@ contract DemoEquityToken is ERC1155, ERC1155Supply, ERC1155Pausable, AccessContr
     string public constant symbol = "dEQT";
 
     event Minted(address indexed to, uint256 indexed id, uint256 amount, address indexed operator);
+    event Burned(address indexed from, uint256 indexed id, uint256 amount, address indexed operator);
 
     constructor(string memory uri_, address admin) ERC1155(uri_) {
         require(admin != address(0), "DemoEquityToken: admin is zero address");
@@ -54,6 +55,25 @@ contract DemoEquityToken is ERC1155, ERC1155Supply, ERC1155Pausable, AccessContr
         require(amount > 0, "DemoEquityToken: amount is zero");
         _mint(to, id, amount, data);
         emit Minted(to, id, amount, _msgSender());
+    }
+
+    /**
+     * @notice Detruit `amount` tokens `id` depuis le wallet `from` (rachat /
+     *         vente cote demandee par le detenteur).
+     * @dev    Reserve au back-office (MINTER_ROLE), sans approbation
+     *         prealable du detenteur : symetrique du mint, qui cree deja des
+     *         tokens directement dans le wallet du client sans son
+     *         intervention on-chain. Coherent avec le modele de confiance
+     *         deja en place (le back-office est deja custodial de fait pour
+     *         l'emission).
+     */
+    function burnFrom(address from, uint256 id, uint256 amount)
+        external
+        onlyRole(MINTER_ROLE)
+    {
+        require(amount > 0, "DemoEquityToken: amount is zero");
+        _burn(from, id, amount);
+        emit Burned(from, id, amount, _msgSender());
     }
 
     /// @notice Emission par lots (operations d'administration).

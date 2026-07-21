@@ -1,9 +1,16 @@
 // ============================================================================
-// Variante PRODUCTION du schéma — PostgreSQL (Neon, Supabase, RDS…).
-// Identique à schema.prisma mais avec enums natifs et Decimal pour les
-// montants. Pour l'utiliser :
-//   1. remplacer le contenu de schema.prisma par ce fichier ;
-//   2. DATABASE_URL="postgresql://user:pass@host:5432/db" ;
+// Variante PRODUCTION du schéma — PostgreSQL (Neon, Supabase, RDS…) avec
+// enums natifs et Decimal pour les montants.
+//
+// ⚠ NON UTILISÉE PAR LE DÉPLOIEMENT ACTUEL : la production tourne sur
+// schema.prisma (provider postgresql, statuts en String). Ce fichier est une
+// cible de migration « durcie » et n'inclut PAS encore le modèle SellOrder ni
+// le champ HedgingOrder.executedPrice ajoutés récemment — à compléter (enum
+// SellStatus, relations User/Asset) avant de l'adopter.
+//
+// Pour l'utiliser :
+//   1. reporter les évolutions manquantes depuis schema.prisma ;
+//   2. remplacer le contenu de schema.prisma par ce fichier ;
 //   3. npx prisma migrate dev --name init
 // Les unions TypeScript de src/lib/status.ts correspondent 1:1 à ces enums.
 // ============================================================================

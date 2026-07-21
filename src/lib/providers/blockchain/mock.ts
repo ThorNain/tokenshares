@@ -4,7 +4,13 @@
  * (mint, confirmations, erreurs, relances) en local.
  */
 import { fakeTxHash } from "@/lib/public-token";
-import type { BlockchainProvider, MintParams, MintResult } from "@/lib/providers/types";
+import type {
+  BlockchainProvider,
+  MintParams,
+  MintResult,
+  BurnParams,
+  BurnResult,
+} from "@/lib/providers/types";
 
 /** Numéro de bloc fictif croissant (≈ un bloc toutes les 2 s, base arbitraire). */
 function simulatedBlockNumber(): number {
@@ -46,6 +52,31 @@ export class MockBlockchainProvider implements BlockchainProvider {
       blockNumber: simulatedBlockNumber(),
       confirmations: 12,
       feeWei: "31500000000000", // ~21 000 gas × 1,5 gwei (fictif)
+    };
+  }
+
+  async burnFrom(params: BurnParams): Promise<BurnResult> {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(params.fromAddress)) {
+      return { ok: false, error: `Adresse source invalide : ${params.fromAddress}` };
+    }
+    if (!Number.isInteger(params.quantity) || params.quantity < 1) {
+      return { ok: false, error: `Quantité invalide : ${params.quantity}` };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    if (params.simulateFailure) {
+      return {
+        ok: false,
+        error: "Erreur RPC simulée : burn reverted (simulation d'échec pour test de relance)",
+      };
+    }
+
+    return {
+      ok: true,
+      txHash: fakeTxHash(),
+      blockNumber: simulatedBlockNumber(),
+      confirmations: 12,
+      feeWei: "28000000000000",
     };
   }
 }
