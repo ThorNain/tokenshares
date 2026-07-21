@@ -26,17 +26,34 @@ C'est tout. Par défaut, l'application fonctionne entièrement en local :
 | Blockchain      | Simulation locale (hash fictifs)| Base Sepolia / Sepolia via viem        |
 | Prix de marché  | Simulés (déterministes)         | Interface `MarketDataProvider` à brancher |
 
+## Connexion : deux modes selon la configuration Privy
+
+La page `/login` s'adapte automatiquement :
+
+- **Privy configuré** (`NEXT_PUBLIC_PRIVY_APP_ID` + `PRIVY_APP_SECRET` renseignés
+  — c'est le cas en production) : connexion par **e-mail réel + code à usage
+  unique** (OTP reçu par e-mail). Aucun mot de passe, aucun n'est stocké. Un
+  **embedded wallet non-custodial** est créé automatiquement à la première
+  connexion ; la clé privée ne transite jamais par le serveur. Pour tester le
+  parcours client, il faut donc une **boîte e-mail réelle** (pour recevoir le
+  code).
+- **Privy non configuré** (mode démonstration local) : connexion par **e-mail
+  seul** (aucun code, aucun mot de passe), un wallet fictif est associé au
+  compte. Pratique pour tester en local sans compte externe.
+
 ## Comptes de test
 
 Après `npm run seed` :
 
 - **Client de démonstration** : `claire.dupont@example.test`
-  → page `/login`, saisir cet e-mail (aucun mot de passe en mode démo).
-  Ce compte possède les 8 commandes de scénario `ORD-DEMO01` → `ORD-DEMO08`.
-- **Administrateur de démonstration** : `admin@example.test`
-  → page `/admin/login`. Le mot de passe est défini localement par la variable
-  `ADMIN_PASSWORD` du fichier `.env` (valeur de dev : `demo-admin-2026!`).
-  Les identifiants ne sont **jamais** codés dans le frontend ni stockés en base.
+  → possède les 8 commandes de scénario `ORD-DEMO01` → `ORD-DEMO08`, visibles
+  dans l'**administration**. ⚠️ Avec Privy actif, ce compte ne peut pas se
+  *connecter* (il n'a pas d'identité Privy) : il sert à peupler les vues admin.
+  Pour vous connecter en tant que client avec Privy, utilisez votre propre
+  e-mail. En mode démonstration (sans Privy), saisir cet e-mail suffit.
+- **Administrateur** : `admin@example.test` → page `/admin/login`, mot de passe
+  défini par la variable `ADMIN_PASSWORD` (indépendant de Privy). Les
+  identifiants ne sont **jamais** codés dans le frontend ni stockés en base.
 
 ## Scénarios pré-chargés (seed)
 
@@ -58,16 +75,33 @@ Plus 92 commandes aléatoires couvrant tous les statuts, 20 clients,
 
 1. `npm run dev`, ouvrir http://localhost:3000 ;
 2. `/assets` → choisir un actif → **Acheter** ;
-3. se connecter (n'importe quel e-mail en mode démo) ;
+3. se connecter (e-mail + code Privy si configuré ; e-mail seul en mode démo) ;
 4. renseigner l'adresse de livraison → **Procéder au paiement (test)** ;
-5. sur la page de paiement simulée : **Simuler un paiement réussi** ;
-6. la confirmation attend le webhook (le retour navigateur ne valide jamais
-   une commande), puis le pipeline enchaîne automatiquement :
-   couverture simulée → mint ERC-1155 → QR code → préparation d'expédition ;
-7. **Vérifier le token** : `/dashboard/portfolio` (position + valorisation) et
-   `/dashboard/orders/<id>` (timeline 12 étapes, hash de transaction, QR code).
-   Côté entreprise : `/admin/blockchain` et le bloc « Création du token » de la
-   fiche commande. Sur un vrai testnet, le lien explorateur (BaseScan) devient actif.
+5. sur la page de paiement simulée : **Simuler un paiement réussi** (ou carte
+   de test Stripe si configuré) ;
+6. la confirmation attend le webhook (le retour navigateur ne valide jamais une
+   commande). La suite dépend de `BROKER_PROVIDER` :
+   - `mock` : le pipeline enchaîne **automatiquement** couverture → mint
+     ERC-1155 → QR code → préparation d'expédition ;
+   - `manual` : la commande s'arrête à **« couverture en attente »**.
+     L'opérateur achète l'action réelle chez son courtier puis, dans la fiche
+     commande admin, clique **« Confirmer le prix d'achat »** et saisit le prix
+     obtenu → ce qui déclenche le mint puis la préparation d'expédition ;
+7. **Vérifier le token** : `/dashboard/portfolio` (position + valorisation, bouton
+   **Vendre**) et `/dashboard/orders/<id>` (timeline 12 étapes, hash de
+   transaction, QR code). Côté entreprise : `/admin/blockchain` et le bloc
+   « Création du token » de la fiche commande. Avec `BLOCKCHAIN_PROVIDER=viem`,
+   le lien explorateur (BaseScan) est actif et le token existe réellement on-chain.
+
+### Vendre un token (rachat + destruction)
+
+Depuis `/dashboard/portfolio`, bouton **Vendre** → l'ordre de vente est créé.
+En `BROKER_PROVIDER=manual`, il attend l'exécution réelle : l'opérateur vend
+l'action chez son courtier puis, dans **`/admin/sell-orders`**, clique
+**« Confirmer le prix de vente »** et saisit le prix → le token est alors
+**détruit (burn)** sur la chaîne et disparaît du wallet. En `mock`, la vente et
+le burn s'enchaînent immédiatement. Garde anti double-vente : on ne peut vendre
+que `détenu − déjà engagé en vente`.
 
 ### Tester un échec de paiement
 
@@ -97,7 +131,7 @@ deux émissions, même si un webhook est rejoué.
 ## Tests
 
 ```bash
-npm run test        # 33 tests unitaires (Vitest) : prix, statuts, CSV, filtres, sessions
+npm run test        # 38 tests unitaires (Vitest) : prix, statuts, CSV, filtres, sessions, FX
 npm run test:e2e    # Playwright (prérequis : npx playwright install chromium + npm run seed)
 npm run typecheck   # TypeScript strict
 ```
@@ -107,6 +141,13 @@ d'achat complet (succès **et** échec de paiement), protection des routes
 admin (y compris client connecté → 403), liste/recherche/filtres des
 commandes admin, fiche détaillée, relance d'un mint échoué, changement de
 statut de livraison, génération de QR code, export CSV, réserves et erreurs.
+
+> ⚠️ **Les tests e2e ciblent le mode démonstration** (connexion par e-mail
+> seul). Ils s'appuient sur `/api/auth/demo-login`, qui est **désactivé quand
+> Privy est configuré** (la connexion exige alors un code e-mail réel,
+> non automatisable). Les tests qui simulent un client se **sautent
+> automatiquement** si `NEXT_PUBLIC_PRIVY_APP_ID` est défini. Pour lancer la
+> suite e2e complète, exécutez-la sans variables Privy dans l'environnement.
 
 Tests du smart contract : `cd contracts && npm install && npm test`.
 

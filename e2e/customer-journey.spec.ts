@@ -1,12 +1,19 @@
 /**
  * Tests e2e — parcours client complet : connexion, achat, adresse, paiement
  * simulé (succès ET échec), confirmation webhook, portefeuille.
+ *
+ * Ces tests ciblent le MODE DÉMONSTRATION (connexion par e-mail seul). Quand
+ * Privy est configuré, la connexion exige un code e-mail réel non
+ * automatisable : la suite est alors sautée.
  */
 import { test, expect } from "@playwright/test";
 
+const PRIVY_ENABLED = Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
 const EMAIL = `parcours-${Date.now()}@example.test`;
 
 test.describe.serial("Parcours d'achat complet", () => {
+  test.skip(PRIVY_ENABLED, "Parcours client automatisable uniquement en mode démonstration (sans Privy).");
+
   test("connexion démo, commande, paiement simulé réussi, token au portefeuille", async ({
     page,
   }) => {

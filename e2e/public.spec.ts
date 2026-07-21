@@ -50,7 +50,11 @@ test.describe("Protection des routes", () => {
   });
 
   test("un client connecté ne peut pas accéder à l'administration", async ({ page }) => {
-    // Connexion démo côté client.
+    // Connexion démo côté client (indisponible si Privy est actif).
+    test.skip(
+      Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID),
+      "Connexion client automatisable uniquement en mode démonstration (sans Privy).",
+    );
     await page.goto("/login");
     await page.getByLabel("Adresse e-mail").fill("client-e2e@example.test");
     await page.getByRole("button", { name: "Se connecter" }).click();
