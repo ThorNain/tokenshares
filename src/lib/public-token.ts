@@ -7,12 +7,33 @@
 import { createHash, randomBytes } from "node:crypto";
 
 /**
- * Jeton public d'une commande (URL /claim/{token}).
- * 128 bits d'entropie, encodage base64url. Ne contient AUCUNE donnée :
- * ni clé privée, ni donnée personnelle, ni session.
+ * Jeton public opaque (128 bits, base64url). Ne contient AUCUNE donnée :
+ * ni clé privée, ni donnée personnelle, ni session. Conservé pour usages
+ * internes divers (clés d'idempotence, etc.).
  */
 export function generatePublicToken(): string {
   return randomBytes(16).toString("base64url");
+}
+
+/**
+ * Code court et lisible pour le lien du QR code physique (URL /p/{code}),
+ * ex. AB7X92. Alphabet sans ambiguïté (pas de O/0/I/1). L'indirection est
+ * volontaire : le QR ne pointe QUE vers notre page — jamais vers le wallet ni
+ * la clé — ce qui permet de le désactiver, de changer de fournisseur de wallet
+ * ou de modifier le comportement plus tard sans réimprimer les objets.
+ *
+ * Longueur par défaut 8 → 32^8 ≈ 1 000 milliards de combinaisons, ce qui rend
+ * l'énumération impraticable tout en gardant un code compact. L'unicité est
+ * garantie par la contrainte en base (avec ré-essai en cas de collision).
+ */
+export function generateClaimCode(length = 8): string {
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const bytes = randomBytes(length);
+  let out = "";
+  for (let i = 0; i < length; i++) {
+    out += alphabet[(bytes[i] as number) % alphabet.length];
+  }
+  return out;
 }
 
 /** Identifiant de commande lisible, ex. ORD-8F3K2A (alphabet sans ambiguïtés). */

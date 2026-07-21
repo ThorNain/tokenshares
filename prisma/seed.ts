@@ -339,10 +339,12 @@ async function createDemoOrder(params: {
 
   // QR code + objet physique.
   if (hasQr) {
+    const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    const claimCode = Array.from({ length: 8 }, () => alphabet[randInt(0, alphabet.length - 1)]).join("");
     await prisma.qrCode.create({
       data: {
         orderId: order.id,
-        publicToken: `seed-${publicId.toLowerCase()}-${hex(16)}`,
+        publicToken: claimCode,
         active: true,
         createdAt: minutesAfter(createdAt, 15),
       },
@@ -413,6 +415,7 @@ async function main() {
   await prisma.errorLog.deleteMany();
   await prisma.webhookEvent.deleteMany();
   await prisma.blockchainTransaction.deleteMany();
+  await prisma.sellOrder.deleteMany();
   await prisma.tokenMint.deleteMany();
   await prisma.hedgingOrder.deleteMany();
   await prisma.payment.deleteMany();

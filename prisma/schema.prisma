@@ -409,11 +409,14 @@ model QrCode {
   orderId String
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  // Jeton public aléatoire (URL /claim/{publicToken}). Ne contient JAMAIS de
+  // Code public court (URL /p/{publicToken}, ex. AB7X92). Ne contient JAMAIS de
   // clé privée, seed phrase, mot de passe, session ni donnée personnelle.
   publicToken String    @unique
   active      Boolean   @default(true)
   revokedAt   DateTime?
+  // Suivi des scans (analytics) : nombre de consultations de la page /p/{code}.
+  scanCount     Int       @default(0)
+  lastScannedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

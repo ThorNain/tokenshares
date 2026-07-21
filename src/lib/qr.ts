@@ -1,13 +1,14 @@
 /**
  * Génération des QR codes de commande (PNG + SVG).
- * Le QR code encode UNIQUEMENT l'URL publique /claim/{token} — jamais de clé
+ * Le QR code encode UNIQUEMENT l'URL publique courte /p/{code} — jamais de clé
  * privée, seed phrase, mot de passe, session ni donnée personnelle.
  */
 import QRCode from "qrcode";
 import { env } from "@/lib/env";
 
+/** URL courte imprimée sur l'objet, ex. https://monsite.com/p/AB7X92. */
 export function claimUrl(publicToken: string): string {
-  return `${env.appUrl}/claim/${publicToken}`;
+  return `${env.appUrl}/p/${publicToken}`;
 }
 
 const QR_OPTIONS = {

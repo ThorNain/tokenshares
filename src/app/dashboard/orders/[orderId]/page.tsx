@@ -170,7 +170,7 @@ export default async function OrderTrackingPage({ params }: { params: { orderId:
                   className="mx-auto mt-4 h-44 w-44 rounded-xl border border-ink/10"
                 />
                 <p className="mt-3 text-center text-xs text-ink-muted">
-                  Pointe vers /claim/… — aucune donnée sensible embarquée.
+                  Pointe vers /p/… — aucune donnée sensible embarquée.
                 </p>
                 <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
                   <a
@@ -186,7 +186,7 @@ export default async function OrderTrackingPage({ params }: { params: { orderId:
                     <IconDownload className="h-3.5 w-3.5" /> SVG
                   </a>
                   <Link
-                    href={`/claim/${activeQr.publicToken}`}
+                    href={`/p/${activeQr.publicToken}`}
                     className="inline-flex items-center gap-1 rounded-full border border-ink/15 px-3 py-1.5 font-medium text-ink hover:bg-ink/5"
                   >
                     Ouvrir la page publique

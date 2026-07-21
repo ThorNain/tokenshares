@@ -17,7 +17,7 @@ import { prisma } from "@/lib/db";
 import { audit, SYSTEM_ACTOR, type Actor } from "@/lib/audit";
 import { logError, safeErrorMessage } from "@/lib/error-log";
 import { env } from "@/lib/env";
-import { generateOrderPublicId, generatePublicToken } from "@/lib/public-token";
+import { generateOrderPublicId, generatePublicToken, generateClaimCode } from "@/lib/public-token";
 import { getBrokerProvider } from "@/lib/providers/broker";
 import { getBlockchainProvider } from "@/lib/providers/blockchain";
 import { getShippingProvider } from "@/lib/providers/shipping/mock";
@@ -551,9 +551,7 @@ export async function prepareShipping(orderId: string, actor: Actor = SYSTEM_ACT
   if (!order) throw new FulfillmentError("Commande introuvable.", 404);
 
   if (order.qrCodes.length === 0) {
-    const qr = await prisma.qrCode.create({
-      data: { orderId: order.id, publicToken: generatePublicToken(), active: true },
-    });
+    const qr = await createQrWithUniqueCode(order.id);
     await audit({
       actor,
       action: "qr_generated",
@@ -588,27 +586,42 @@ export async function regenerateQr(
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new FulfillmentError("Commande introuvable.", 404);
 
-  const newToken = generatePublicToken();
-  await prisma.$transaction(async (tx) => {
-    await tx.qrCode.updateMany({
-      where: { orderId, active: true },
-      data: { active: false, revokedAt: new Date() },
-    });
-    await tx.qrCode.create({
-      data: { orderId, publicToken: newToken, active: true },
-    });
+  await prisma.qrCode.updateMany({
+    where: { orderId, active: true },
+    data: { active: false, revokedAt: new Date() },
   });
+  const qr = await createQrWithUniqueCode(orderId);
 
   await audit({
     actor,
     action: "qr_regenerated",
     entityType: "QrCode",
-    entityId: orderId,
+    entityId: qr.id,
     orderId,
     justification: justification ?? null,
   });
 
-  return { publicToken: newToken };
+  return { publicToken: qr.publicToken };
+}
+
+/**
+ * Crée un QR code avec un code court unique (/p/{code}). Ré-essaie en cas de
+ * collision sur la contrainte d'unicité (extrêmement rare avec 8 caractères).
+ */
+async function createQrWithUniqueCode(orderId: string) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      return await prisma.qrCode.create({
+        data: { orderId, publicToken: generateClaimCode(), active: true },
+      });
+    } catch (error) {
+      // Collision d'unicité Prisma (P2002) → nouveau code, on réessaie.
+      const code = (error as { code?: string }).code;
+      if (code === "P2002" && attempt < 5) continue;
+      throw error;
+    }
+  }
+  throw new FulfillmentError("Impossible de générer un code QR unique.", 500);
 }
 
 // ---------------------------------------------------------------------------

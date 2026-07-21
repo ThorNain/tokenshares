@@ -445,8 +445,8 @@ export default async function AdminOrderDetailPage({ params }: { params: { order
               <div className="text-xs text-ink-muted">
                 <p>
                   Lien public :{" "}
-                  <Link href={`/claim/${activeQr!.publicToken}`} className="text-accent hover:underline">
-                    /claim/{shortHex(activeQr!.publicToken, 6)}
+                  <Link href={`/p/${activeQr!.publicToken}`} className="text-accent hover:underline">
+                    /p/{activeQr!.publicToken}
                   </Link>
                 </p>
                 <p className="mt-1">
@@ -457,6 +457,12 @@ export default async function AdminOrderDetailPage({ params }: { params: { order
                   <a href={`/api/qr/${order.id}?format=svg`} className="text-accent hover:underline">
                     SVG
                   </a>
+                </p>
+                <p className="mt-1">
+                  {activeQr!.scanCount} scan{activeQr!.scanCount > 1 ? "s" : ""}
+                  {activeQr!.lastScannedAt
+                    ? ` · dernier ${formatDateTime(activeQr!.lastScannedAt)}`
+                    : ""}
                 </p>
                 {order.qrCodes.length > 1 ? (
                   <p className="mt-1">{order.qrCodes.length - 1} ancien(s) lien(s) révoqué(s)</p>
