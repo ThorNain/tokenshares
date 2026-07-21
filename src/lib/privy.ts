@@ -45,7 +45,11 @@ export async function verifyPrivyAccessToken(accessToken: string): Promise<Verif
         if (a.type === "email" && typeof a.address === "string" && !email) {
           email = a.address;
         }
-        if (a.type === "wallet" && typeof a.address === "string") {
+        if (
+          a.type === "wallet" &&
+          typeof a.address === "string" &&
+          /^0x[0-9a-fA-F]{40}$/.test(a.address)
+        ) {
           // Préférence pour l'embedded wallet Privy.
           if (!walletAddress || a.walletClientType === "privy") {
             walletAddress = a.address;

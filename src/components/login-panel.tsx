@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { useCreateWallet, usePrivy, useWallets } from "@privy-io/react-auth";
 import { Button, Card, Input, Label, Alert, FieldError } from "@/components/ui";
 
 const PRIVY_ENABLED = Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
@@ -33,22 +33,35 @@ function PrivyLoginPanel() {
   const router = useRouter();
   const next = useNextPath();
   const { ready, authenticated, login, getAccessToken } = usePrivy();
-  const { wallets } = useWallets();
+  const { createWallet } = useCreateWallet();
+  const { ready: walletsReady, wallets } = useWallets();
   const [error, setError] = useState<string | null>(null);
+  const [provisioning, setProvisioning] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
   const exchanging = useRef(false);
 
   useEffect(() => {
-    if (!ready || !authenticated || exchanging.current) return;
+    // Privy termine la création automatique du wallet avant de marquer la
+    // collection de wallets comme prête. Attendre les deux états évite de
+    // créer une session applicative sans wallet lors de la première connexion.
+    if (!ready || !authenticated || !walletsReady || exchanging.current) return;
     exchanging.current = true;
+    setProvisioning(true);
     (async () => {
       try {
+        const embedded = wallets.find((wallet) => wallet.walletClientType === "privy");
+        // Filet de sécurité pour un ancien compte Privy ou une création
+        // automatique qui n'aurait pas été appliquée lors d'une session passée.
+        if (!embedded) {
+          await createWallet();
+        }
+
         const accessToken = await getAccessToken();
         if (!accessToken) throw new Error("Jeton Privy indisponible.");
-        const embedded = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
         const res = await fetch("/api/auth/privy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accessToken, walletAddress: embedded?.address }),
+          body: JSON.stringify({ accessToken }),
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -58,10 +71,21 @@ function PrivyLoginPanel() {
         router.refresh();
       } catch (e) {
         exchanging.current = false;
+        setProvisioning(false);
         setError(e instanceof Error ? e.message : "Erreur de connexion.");
       }
     })();
-  }, [ready, authenticated, getAccessToken, wallets, router, next]);
+  }, [
+    ready,
+    authenticated,
+    walletsReady,
+    createWallet,
+    getAccessToken,
+    wallets,
+    router,
+    next,
+    retryNonce,
+  ]);
 
   return (
     <Card className="mx-auto w-full max-w-md p-8">
@@ -76,8 +100,18 @@ function PrivyLoginPanel() {
           {error}
         </Alert>
       ) : null}
-      <Button size="lg" className="mt-6 w-full" disabled={!ready} onClick={() => login()}>
-        Continuer avec Privy
+      <Button
+        size="lg"
+        className="mt-6 w-full"
+        disabled={!ready || provisioning || (authenticated && !walletsReady)}
+        loading={provisioning}
+        onClick={() => {
+          setError(null);
+          if (authenticated) setRetryNonce((value) => value + 1);
+          else login();
+        }}
+      >
+        {authenticated && error ? "Réessayer" : "Continuer avec Privy"}
       </Button>
     </Card>
   );

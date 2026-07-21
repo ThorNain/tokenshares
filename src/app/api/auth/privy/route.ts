@@ -16,13 +16,17 @@ import { audit } from "@/lib/audit";
 
 const bodySchema = z.object({
   accessToken: z.string().min(10).max(5000),
-  // Adresse communiquée par le client en secours ; l'adresse vérifiée côté
-  // Privy est toujours prioritaire.
-  walletAddress: z
-    .string()
-    .regex(/^0x[0-9a-fA-F]{40}$/, "Adresse de wallet invalide")
-    .optional(),
-});
+}).strict();
+
+class PrivyAccountConflict extends Error {
+  constructor(
+    readonly type: "email_owner_conflict" | "wallet_owner_conflict",
+    message: string,
+  ) {
+    super(message);
+    this.name = "PrivyAccountConflict";
+  }
+}
 
 export async function POST(request: Request) {
   const limited = rateLimit(request, "privy-login", 20, 60_000);
@@ -56,20 +60,104 @@ export async function POST(request: Request) {
 
   const email = verified.email ?? `${verified.privyUserId.replace(/[^a-zA-Z0-9]/g, "")}@privy.local`;
 
-  const user = await prisma.user.upsert({
-    where: { privyUserId: verified.privyUserId },
-    create: { privyUserId: verified.privyUserId, email, role: "customer" },
-    update: { email },
-  });
-
-  const walletAddress = verified.walletAddress ?? parsed.data.walletAddress ?? null;
-  if (walletAddress) {
-    await prisma.wallet.upsert({
-      where: { address_chainId: { address: walletAddress, chainId: env.chainId } },
-      create: { userId: user.id, address: walletAddress, chainId: env.chainId, provider: "privy" },
-      update: {},
+  // La création du compte applicatif n'est finalisée que lorsque Privy a bien
+  // provisionné un wallet EVM. L'adresse vient exclusivement de l'API Privy,
+  // jamais d'une valeur déclarée par le navigateur.
+  if (!verified.walletAddress) {
+    await logError({
+      service: "privy",
+      type: "embedded_wallet_missing",
+      severity: "warning",
+      message: "Compte Privy authentifié sans wallet EVM embarqué.",
     });
+    return NextResponse.json(
+      { error: "Votre wallet Privy n'est pas encore disponible. Veuillez réessayer." },
+      { status: 409 },
+    );
   }
+  const walletAddress = verified.walletAddress;
+
+  let provisioned;
+  try {
+    provisioned = await prisma.$transaction(async (tx) => {
+      let user = await tx.user.findUnique({
+        where: { privyUserId: verified.privyUserId },
+      });
+
+      if (!user) {
+        const emailOwner = await tx.user.findUnique({ where: { email } });
+        if (emailOwner) {
+          // Permet de migrer sans doublon un ancien compte de démonstration,
+          // uniquement lorsqu'il s'agit bien d'un compte client non lié.
+          if (emailOwner.role !== "customer" || emailOwner.privyUserId) {
+            throw new PrivyAccountConflict(
+              "email_owner_conflict",
+              "L'adresse e-mail Privy est déjà rattachée à un autre compte.",
+            );
+          }
+          user = await tx.user.update({
+            where: { id: emailOwner.id },
+            data: { privyUserId: verified.privyUserId },
+          });
+        } else {
+          user = await tx.user.create({
+            data: { privyUserId: verified.privyUserId, email, role: "customer" },
+          });
+        }
+      } else if (user.email !== email) {
+        const emailOwner = await tx.user.findUnique({ where: { email } });
+        if (emailOwner && emailOwner.id !== user.id) {
+          throw new PrivyAccountConflict(
+            "email_owner_conflict",
+            "La nouvelle adresse e-mail Privy appartient déjà à un autre compte.",
+          );
+        }
+        user = await tx.user.update({ where: { id: user.id }, data: { email } });
+      }
+
+      const existingWallet = await tx.wallet.findUnique({
+        where: {
+          address_chainId: { address: walletAddress, chainId: env.chainId },
+        },
+      });
+      if (existingWallet && existingWallet.userId !== user.id) {
+        throw new PrivyAccountConflict(
+          "wallet_owner_conflict",
+          "Le wallet Privy vérifié est déjà rattaché à un autre utilisateur.",
+        );
+      }
+
+      const wallet = existingWallet
+        ? await tx.wallet.update({
+            where: { id: existingWallet.id },
+            data: { provider: "privy" },
+          })
+        : await tx.wallet.create({
+            data: {
+              userId: user.id,
+              address: walletAddress,
+              chainId: env.chainId,
+              provider: "privy",
+            },
+          });
+
+      return { user, wallet };
+    });
+  } catch (error) {
+    if (!(error instanceof PrivyAccountConflict)) throw error;
+    await logError({
+      service: "privy",
+      type: error.type,
+      severity: "critical",
+      message: error.message,
+    });
+    return NextResponse.json(
+      { error: "Ces identifiants Privy sont déjà associés à un autre compte." },
+      { status: 409 },
+    );
+  }
+
+  const { user, wallet } = provisioned;
 
   await createSession({ userId: user.id, role: "customer", email: user.email });
   await audit({
@@ -79,5 +167,5 @@ export async function POST(request: Request) {
     entityId: user.id,
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, walletAddress: wallet.address });
 }
