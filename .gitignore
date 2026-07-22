@@ -30,3 +30,6 @@ contracts/typechain-types/
 
 .vercel
 .env*
+
+# Fichier d'accès rapide privé (contient des identifiants — jamais versionné)
+ACCES-RAPIDE.txt
