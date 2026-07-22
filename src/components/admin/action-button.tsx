@@ -4,9 +4,13 @@
  * Bouton d'action manuelle administrateur : ouvre une confirmation
  * (obligatoire — section 25), avec justification facultative ou requise et
  * champs additionnels éventuels, puis appelle l'API d'actions et rafraîchit.
+ *
+ * Accessibilité : la fenêtre modale est un dialog étiqueté (aria-labelledby),
+ * se ferme avec la touche Échap ou un clic sur le fond, place le focus à
+ * l'ouverture et le restaure sur le bouton déclencheur à la fermeture.
  */
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button, Alert, Label, Input, Textarea, type ButtonProps } from "@/components/ui";
 
 export interface ActionField {
@@ -44,6 +48,28 @@ export function AdminActionButton({
   const [message, setMessage] = useState<string | null>(null);
   const [justification, setJustification] = useState("");
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const titleId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Échap pour fermer + focus initial dans la modale + restauration du focus.
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    // Focus le premier champ interactif de la modale.
+    const focusable = dialogRef.current?.querySelector<HTMLElement>(
+      "input, textarea, button",
+    );
+    focusable?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [open, busy]);
 
   async function run() {
     setError(null);
@@ -91,18 +117,27 @@ export function AdminActionButton({
 
   return (
     <>
-      <Button variant={variant} size={size} onClick={() => setOpen(true)}>
+      <Button ref={triggerRef} variant={variant} size={size} onClick={() => setOpen(true)}>
         {label}
       </Button>
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={label}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => {
+            if (!busy) setOpen(false);
+          }}
         >
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="font-semibold text-ink">{label}</h3>
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id={titleId} className="font-semibold text-ink">
+              {label}
+            </h3>
             <p className="mt-2 text-sm text-ink-muted">{confirmText}</p>
 
             {(fields ?? []).map((f) => (
@@ -115,19 +150,17 @@ export function AdminActionButton({
                   id={`field-${f.name}`}
                   placeholder={f.placeholder}
                   value={fieldValues[f.name] ?? ""}
-                  onChange={(e) =>
-                    setFieldValues((v) => ({ ...v, [f.name]: e.target.value }))
-                  }
+                  onChange={(e) => setFieldValues((v) => ({ ...v, [f.name]: e.target.value }))}
                 />
               </div>
             ))}
 
             <div className="mt-4">
-              <Label htmlFor="justification">
+              <Label htmlFor={`justification-${titleId}`}>
                 Justification{requireJustification ? " *" : " (facultative)"}
               </Label>
               <Textarea
-                id="justification"
+                id={`justification-${titleId}`}
                 rows={2}
                 value={justification}
                 onChange={(e) => setJustification(e.target.value)}

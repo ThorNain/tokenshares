@@ -16,7 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <h1 className="text-2xl font-semibold tracking-tight text-ink">Mon espace</h1>
           <p className="text-sm text-ink-muted">{session.email}</p>
         </div>
-        <nav className="flex gap-1 rounded-full border border-ink/10 bg-white p-1 text-sm">
+        <nav className="flex gap-1 rounded-full border border-ink/10 bg-surface p-1 text-sm">
           <Link href="/dashboard/portfolio" className="rounded-full px-4 py-1.5 font-medium text-ink-soft hover:bg-ink/5 hover:text-ink">
             Portefeuille
           </Link>

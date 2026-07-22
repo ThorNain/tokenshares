@@ -4,12 +4,13 @@
 import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { LogoutButton } from "@/components/logout-button";
+import { ThemeToggle } from "@/components/theme";
 
 export async function Navbar() {
   const session = await getSession();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-ink/10 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-ink/10 bg-surface/90 backdrop-blur">
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-8">
           <Link href="/" className="text-lg font-semibold tracking-tight text-ink">
@@ -28,6 +29,7 @@ export async function Navbar() {
           </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
+          <ThemeToggle />
           {session ? (
             <>
               {session.role === "admin" ? (

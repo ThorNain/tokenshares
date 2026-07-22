@@ -4,7 +4,7 @@
  */
 export function DemoBanner() {
   return (
-    <div className="bg-ink px-4 py-2 text-center text-xs font-medium tracking-wide text-white">
+    <div className="bg-panel px-4 py-2 text-center text-xs font-medium tracking-wide text-white">
       Prototype de démonstration — aucun investissement réel. Paiements en mode test, tokens émis
       sur un réseau d&apos;essai.
     </div>

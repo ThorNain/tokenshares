@@ -6,7 +6,7 @@
  * l'endpoint fourni avec un `executedPrice` numérique, puis rafraîchit.
  */
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Alert, Label, Input, type ButtonProps } from "@/components/ui";
 
 export function PriceActionButton({
@@ -33,6 +33,15 @@ export function PriceActionButton({
   const [price, setPrice] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, busy]);
 
   async function submit() {
     setError(null);
@@ -69,12 +78,18 @@ export function PriceActionButton({
       </Button>
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => {
+            if (!busy) setOpen(false);
+          }}
         >
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div
+            className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="font-semibold text-ink">{title}</h3>
             <p className="mt-1 text-sm text-ink-muted">{helpText}</p>
             <div className="mt-4">

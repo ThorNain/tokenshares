@@ -15,8 +15,8 @@ type ButtonSize = "sm" | "md" | "lg";
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary: "bg-accent text-white hover:bg-accent-hover shadow-sm",
-  secondary: "bg-ink text-white hover:bg-ink-soft",
-  outline: "border border-ink/15 bg-white text-ink hover:bg-ink/5",
+  secondary: "bg-panel text-white hover:bg-panel/90",
+  outline: "border border-ink/15 bg-surface text-ink hover:bg-ink/5",
   ghost: "text-ink-soft hover:bg-ink/5 hover:text-ink",
   danger: "bg-negative text-white hover:bg-negative/90",
 };
@@ -60,7 +60,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("rounded-2xl border border-ink/10 bg-white shadow-card", className)}
+      className={cn("rounded-2xl border border-ink/10 bg-surface shadow-card", className)}
       {...props}
     />
   );
@@ -114,7 +114,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
       <input
         ref={ref}
         className={cn(
-          "h-10 w-full rounded-lg border border-ink/15 bg-white px-3 text-sm text-ink placeholder:text-ink-muted/60 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50",
+          "h-10 w-full rounded-lg border border-ink/15 bg-surface px-3 text-sm text-ink placeholder:text-ink-muted/60 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50",
           className,
         )}
         {...props}
@@ -129,7 +129,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
       <select
         ref={ref}
         className={cn(
-          "h-10 w-full rounded-lg border border-ink/15 bg-white px-3 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50",
+          "h-10 w-full rounded-lg border border-ink/15 bg-surface px-3 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50",
           className,
         )}
         {...props}
@@ -144,7 +144,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
       <textarea
         ref={ref}
         className={cn(
-          "w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-muted/60 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50",
+          "w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-muted/60 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50",
           className,
         )}
         {...props}
@@ -173,7 +173,7 @@ export function FieldError({ message }: { message?: string }) {
 export function TableWrap({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("overflow-x-auto rounded-2xl border border-ink/10 bg-white shadow-card", className)}
+      className={cn("overflow-x-auto rounded-2xl border border-ink/10 bg-surface shadow-card", className)}
       {...props}
     />
   );

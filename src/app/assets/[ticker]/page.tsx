@@ -126,7 +126,7 @@ export default async function AssetPage({ params }: { params: { ticker: string }
               </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-3">
                 {productGallery.map((photo) => (
-                  <figure key={photo.src} className="overflow-hidden rounded-2xl border border-ink/10 bg-white">
+                  <figure key={photo.src} className="overflow-hidden rounded-2xl border border-ink/10 bg-surface">
                     <div className="relative aspect-square overflow-hidden bg-cream">
                       <Image
                         src={photo.src}
@@ -149,7 +149,7 @@ export default async function AssetPage({ params }: { params: { ticker: string }
             </section>
           ) : null}
 
-          <div className="mt-8 rounded-2xl border border-ink/10 bg-white p-6 text-sm leading-relaxed text-ink-muted">
+          <div className="mt-8 rounded-2xl border border-ink/10 bg-surface p-6 text-sm leading-relaxed text-ink-muted">
             <h2 className="mb-2 font-semibold text-ink">Transparence</h2>
             <p>
               Le prix affiché comprend le prix indicatif de l&apos;actif simulé ainsi qu&apos;une

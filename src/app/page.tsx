@@ -16,7 +16,7 @@ export default async function HomePage() {
     <div className="mx-auto max-w-6xl px-4 sm:px-6">
       {/* Héro */}
       <section className="py-16 text-center sm:py-24">
-        <p className="mx-auto mb-4 w-fit rounded-full border border-ink/10 bg-white px-4 py-1 text-xs font-medium text-ink-muted">
+        <p className="mx-auto mb-4 w-fit rounded-full border border-ink/10 bg-surface px-4 py-1 text-xs font-medium text-ink-muted">
           Prototype de démonstration — aucun investissement réel
         </p>
         <h1 className="mx-auto max-w-3xl text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
@@ -36,7 +36,7 @@ export default async function HomePage() {
           </Link>
           <Link
             href="/risk-disclosure"
-            className="inline-flex items-center rounded-full border border-ink/15 bg-white px-6 py-3 text-sm font-medium text-ink hover:bg-ink/5"
+            className="inline-flex items-center rounded-full border border-ink/15 bg-surface px-6 py-3 text-sm font-medium text-ink hover:bg-ink/5"
           >
             Comprendre les risques
           </Link>
@@ -62,7 +62,7 @@ export default async function HomePage() {
             text: "Wallet non-custodial : la clé privée ne quitte jamais votre appareil. Un QR code sécurisé relie l'objet physique à votre commande.",
           },
         ].map((f) => (
-          <div key={f.title} className="rounded-2xl border border-ink/10 bg-white p-6 shadow-card">
+          <div key={f.title} className="rounded-2xl border border-ink/10 bg-surface p-6 shadow-card">
             <f.icon className="h-6 w-6 text-accent" />
             <h2 className="mt-4 font-semibold text-ink">{f.title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-muted">{f.text}</p>
@@ -94,7 +94,7 @@ export default async function HomePage() {
       </section>
 
       {/* Transparence */}
-      <section className="my-12 rounded-2xl bg-ink px-8 py-10 text-white">
+      <section className="my-12 rounded-2xl bg-panel px-8 py-10 text-white">
         <h2 className="text-lg font-semibold">Transparence</h2>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/80">
           Le prix affiché comprend le prix indicatif de l&apos;actif simulé ainsi qu&apos;une marge

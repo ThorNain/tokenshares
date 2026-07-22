@@ -47,7 +47,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-white hover:text-ink"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-surface hover:text-ink"
             >
               {item.label}
             </Link>

@@ -2,17 +2,80 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Palette pilotée par variables CSS (triplets « R G B » pour supporter les
+ * opacités Tailwind). :root = thème clair ; .dark = thème sombre. La bascule
+ * ajoute/retire la classe `dark` sur <html> (voir ThemeScript + ThemeToggle).
+ */
 @layer base {
+  :root {
+    --color-cream: 250 249 246; /* fond de page */
+    --color-surface: 255 255 255; /* cartes, nav, pied de page */
+    --color-panel: 13 27 42; /* panneaux à fort contraste (texte blanc) */
+    --color-ink: 13 27 42; /* texte principal */
+    --color-ink-soft: 51 65 92;
+    --color-ink-muted: 92 103 125;
+    --color-accent: 31 79 216;
+    --color-accent-hover: 26 67 184;
+    --color-accent-soft: 238 242 253;
+    --color-positive: 15 123 79;
+    --color-negative: 179 38 30;
+    --color-warning: 154 103 0;
+    --shadow-rgb: 13 27 42;
+    color-scheme: light;
+  }
+
+  .dark {
+    --color-cream: 14 18 27; /* fond de page profond */
+    --color-surface: 23 29 42; /* carte élevée */
+    --color-panel: 30 41 66; /* panneau sombre, texte blanc lisible */
+    --color-ink: 233 236 242; /* texte principal clair */
+    --color-ink-soft: 179 188 204;
+    --color-ink-muted: 141 152 171;
+    --color-accent: 96 141 250;
+    --color-accent-hover: 130 168 255;
+    --color-accent-soft: 30 42 74;
+    --color-positive: 45 190 130;
+    --color-negative: 240 118 110;
+    --color-warning: 220 170 70;
+    --shadow-rgb: 0 0 0;
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-cream text-ink antialiased;
   }
   ::selection {
     @apply bg-accent-soft text-accent;
   }
+
+  /* Transition douce lors de la bascule clair/sombre. */
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease,
+      color 0.25s ease,
+      fill 0.25s ease;
+  }
 }
 
 @layer utilities {
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Accessibilité : respect de la préférence « mouvement réduit ». */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

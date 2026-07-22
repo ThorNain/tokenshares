@@ -6,7 +6,7 @@
  * vente réelle est exécutée ensuite par l'opérateur (message explicatif).
  */
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Alert, Label, Input } from "@/components/ui";
 import { formatMoney } from "@/lib/utils";
 
@@ -29,6 +29,15 @@ export function SellButton({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, busy]);
 
   if (sellableQuantity < 1) {
     return <span className="text-xs text-ink-muted">—</span>;
@@ -72,12 +81,18 @@ export function SellButton({
       </Button>
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Vendre ${ticker}`}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => {
+            if (!busy) setOpen(false);
+          }}
         >
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div
+            className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Vendre ${ticker}`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="font-semibold text-ink">Vendre des tokens {ticker}</h3>
             <p className="mt-1 text-sm text-ink-muted">
               Prix indicatif actuel : {formatMoney(currentPrice, currency)}. Vous pouvez vendre

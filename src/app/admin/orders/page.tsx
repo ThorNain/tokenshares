@@ -129,8 +129,8 @@ export default async function AdminOrdersPage({
             className={cn(
               "rounded-full px-3 py-1 text-xs font-medium",
               activeQuick === f.key
-                ? "bg-ink text-white"
-                : "border border-ink/15 bg-white text-ink-soft hover:bg-ink/5",
+                ? "bg-panel text-white"
+                : "border border-ink/15 bg-surface text-ink-soft hover:bg-ink/5",
             )}
           >
             {f.label}
@@ -139,7 +139,7 @@ export default async function AdminOrdersPage({
       </div>
 
       {/* Filtres détaillés (formulaire GET) */}
-      <form method="GET" className="grid gap-3 rounded-2xl border border-ink/10 bg-white p-4 sm:grid-cols-3 lg:grid-cols-5">
+      <form method="GET" className="grid gap-3 rounded-2xl border border-ink/10 bg-surface p-4 sm:grid-cols-3 lg:grid-cols-5">
         <Input name="q" placeholder="Recherche (nom, e-mail, ID, actif…)" defaultValue={searchParams.q ?? ""} className="sm:col-span-2" />
         <Select name="ticker" defaultValue={searchParams.ticker ?? ""} aria-label="Ticker">
           <option value="">Ticker : tous</option>

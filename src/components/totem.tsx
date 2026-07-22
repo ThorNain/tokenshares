@@ -74,7 +74,7 @@ export function Totem({
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center bg-ink font-semibold text-white",
+        "flex shrink-0 items-center justify-center bg-panel font-semibold text-white",
         SIZES[size],
         size === "lg" || size === "xl" ? "text-lg" : "text-sm",
         className,
