@@ -111,8 +111,22 @@ function PrivyLoginPanel() {
           else login();
         }}
       >
-        {authenticated && error ? "Réessayer" : "Continuer avec Privy"}
+        {authenticated && error ? "Réessayer" : "Se connecter"}
       </Button>
+      <p className="mt-4 text-center text-sm text-ink-muted">
+        Nouveau sur la plateforme ?{" "}
+        <button
+          type="button"
+          className="font-medium text-accent hover:underline"
+          disabled={!ready || provisioning}
+          onClick={() => {
+            setError(null);
+            login();
+          }}
+        >
+          Créer un compte
+        </button>
+      </p>
     </Card>
   );
 }
@@ -130,6 +144,7 @@ function DemoLoginPanel() {
   const router = useRouter();
   const next = useNextPath();
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const {
     register,
     handleSubmit,
@@ -141,7 +156,7 @@ function DemoLoginPanel() {
     const res = await fetch("/api/auth/demo-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
+      body: JSON.stringify({ ...values, intent: mode }),
     });
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -154,7 +169,9 @@ function DemoLoginPanel() {
 
   return (
     <Card className="mx-auto w-full max-w-md p-8">
-      <h1 className="text-xl font-semibold text-ink">Connexion</h1>
+      <h1 className="text-xl font-semibold text-ink">
+        {mode === "signin" ? "Connexion" : "Créer un compte"}
+      </h1>
       <Alert tone="warning" className="mt-4">
         Mode démonstration : Privy n&apos;est pas configuré. La connexion se fait par e-mail seul
         et un wallet fictif est associé à votre compte. Aucun mot de passe n&apos;est demandé ni
@@ -166,21 +183,36 @@ function DemoLoginPanel() {
           <Input id="email" type="email" placeholder="vous@exemple.fr" {...register("email")} />
           <FieldError message={errors.email?.message} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="firstName">Prénom (optionnel)</Label>
-            <Input id="firstName" {...register("firstName")} />
+        {mode === "signup" ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="firstName">Prénom (optionnel)</Label>
+              <Input id="firstName" {...register("firstName")} />
+            </div>
+            <div>
+              <Label htmlFor="lastName">Nom (optionnel)</Label>
+              <Input id="lastName" {...register("lastName")} />
+            </div>
           </div>
-          <div>
-            <Label htmlFor="lastName">Nom (optionnel)</Label>
-            <Input id="lastName" {...register("lastName")} />
-          </div>
-        </div>
+        ) : null}
         {error ? <Alert tone="danger">{error}</Alert> : null}
         <Button type="submit" size="lg" loading={isSubmitting} className="w-full">
-          Se connecter
+          {mode === "signin" ? "Se connecter" : "Créer mon compte"}
         </Button>
       </form>
+      <p className="mt-4 text-center text-sm text-ink-muted">
+        {mode === "signin" ? "Vous n’avez pas encore de compte ?" : "Vous avez déjà un compte ?"}{" "}
+        <button
+          type="button"
+          className="font-medium text-accent hover:underline"
+          onClick={() => {
+            setError(null);
+            setMode(mode === "signin" ? "signup" : "signin");
+          }}
+        >
+          {mode === "signin" ? "Créer un compte" : "Se connecter"}
+        </button>
+      </p>
     </Card>
   );
 }

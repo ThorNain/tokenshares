@@ -17,6 +17,7 @@ const bodySchema = z.object({
   email: z.string().email("Adresse e-mail invalide").max(200),
   firstName: z.string().max(100).optional(),
   lastName: z.string().max(100).optional(),
+  intent: z.enum(["signin", "signup"]).default("signin"),
 });
 
 export async function POST(request: Request) {
@@ -48,6 +49,20 @@ export async function POST(request: Request) {
   // Le compte admin ne se connecte jamais par ce canal.
   if (email === env.adminEmail.toLowerCase()) {
     return NextResponse.json({ error: "Utilisez la page /admin/login." }, { status: 403 });
+  }
+
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (parsed.data.intent === "signin" && !existingUser) {
+    return NextResponse.json(
+      { error: "Aucun compte ne correspond à cette adresse. Créez d’abord un compte." },
+      { status: 404 },
+    );
+  }
+  if (parsed.data.intent === "signup" && existingUser) {
+    return NextResponse.json(
+      { error: "Un compte existe déjà avec cette adresse. Utilisez « Se connecter »." },
+      { status: 409 },
+    );
   }
 
   const user = await prisma.user.upsert({
