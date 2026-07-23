@@ -31,6 +31,9 @@ export function Footer() {
               <Link href="/privacy" className="block text-ink-soft hover:text-ink">
                 Confidentialité
               </Link>
+              <Link href="/support" className="block text-ink-soft hover:text-ink">
+                Aide & support
+              </Link>
             </div>
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Compte</p>
