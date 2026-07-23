@@ -185,9 +185,102 @@ export async function advancePipeline(orderId: string, actor: Actor = SYSTEM_ACT
   // l'opérateur saisisse le prix réel d'exécution : le pipeline s'arrête ici
   // et reprendra via confirmHedgePrice().
   if (!hedged.ok || hedged.pending) return;
+  // Cadeau : l'action est couverte mais on n'émet AUCUN token tant que le
+  // destinataire n'a pas réclamé le code. Le pipeline s'arrête ici.
+  if (await deferGiftIfNeeded(orderId, actor)) return;
   const minted = await runMint(orderId, actor);
   if (!minted.ok) return;
   await prepareShipping(orderId, actor);
+}
+
+/**
+ * Si la commande est un cadeau non encore réclamé : génère (une fois) le code
+ * de réclamation, passe la commande en « cadeau en attente de réception » et
+ * NE mint pas. Retourne true si le mint doit être différé.
+ */
+export async function deferGiftIfNeeded(
+  orderId: string,
+  actor: Actor = SYSTEM_ACTOR,
+): Promise<boolean> {
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order || !order.isGift || order.redeemedByUserId) return false;
+
+  const redeemCode = order.redeemCode ?? generatePublicToken();
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { redeemCode, status: "gift_unclaimed" },
+  });
+  if (!order.redeemCode) {
+    await audit({
+      actor,
+      action: "gift_code_generated",
+      entityType: "Order",
+      entityId: order.id,
+      orderId: order.id,
+    });
+  }
+  return true;
+}
+
+/**
+ * Réclamation d'un cadeau : le destinataire (connecté, wallet Privy créé)
+ * saisit le code. Le token est émis dans SON wallet et la commande lui est
+ * réattribuée (le certificat suit). L'acheteur d'origine est conservé.
+ */
+export async function redeemGift(params: {
+  code: string;
+  redeemerUserId: string;
+  actor: Actor;
+}): Promise<{ ok: boolean; orderId?: string; error?: string }> {
+  const order = await prisma.order.findUnique({
+    where: { redeemCode: params.code },
+    include: { hedgingOrder: true, user: { include: { wallets: true } } },
+  });
+  if (!order || !order.isGift) {
+    return { ok: false, error: "Code de réclamation invalide." };
+  }
+  if (order.redeemedByUserId) {
+    return { ok: false, error: "Ce cadeau a déjà été réclamé." };
+  }
+  if (order.hedgingOrder?.status !== "simulated_filled") {
+    return { ok: false, error: "Ce cadeau n'est pas encore prêt à être réclamé." };
+  }
+
+  const redeemer = await prisma.user.findUnique({
+    where: { id: params.redeemerUserId },
+    include: { wallets: true },
+  });
+  if (!redeemer || redeemer.wallets.length === 0) {
+    return { ok: false, error: "Aucun wallet disponible pour recevoir le token." };
+  }
+
+  // Réattribution au destinataire (le portefeuille et le certificat suivent
+  // `userId`). L'acheteur d'origine est conservé pour l'historique.
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      userId: redeemer.id,
+      giftPurchaserUserId: order.giftPurchaserUserId ?? order.userId,
+      redeemedByUserId: redeemer.id,
+      redeemedAt: new Date(),
+      status: "hedge_simulated",
+    },
+  });
+  await audit({
+    actor: params.actor,
+    action: "gift_redeemed",
+    entityType: "Order",
+    entityId: order.id,
+    orderId: order.id,
+    oldValue: order.userId,
+    newValue: redeemer.id,
+  });
+
+  // Émission du token dans le wallet du destinataire, puis préparation.
+  const minted = await runMint(order.id, params.actor);
+  if (!minted.ok) return { ok: false, orderId: order.id, error: minted.error };
+  await prepareShipping(order.id, params.actor);
+  return { ok: true, orderId: order.id };
 }
 
 // ---------------------------------------------------------------------------
@@ -356,6 +449,10 @@ export async function confirmHedgePrice(params: {
     orderId: order.id,
     newValue: JSON.stringify({ executedPrice: params.executedPrice }),
   });
+
+  // Cadeau : on s'arrête après la couverture (génération du code de
+  // réclamation), le token sera émis lors de la réclamation par le destinataire.
+  if (await deferGiftIfNeeded(order.id, params.actor)) return { ok: true };
 
   // Reprise du pipeline : émission du token puis préparation d'expédition.
   const minted = await runMint(order.id, params.actor);

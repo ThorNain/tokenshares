@@ -29,9 +29,50 @@ export default function SupportPage() {
       </h1>
       <p className="mt-3 text-sm leading-relaxed text-ink-muted">
         Vos tokens sont des actifs numériques standard (ERC-1155) détenus dans votre wallet
-        non-custodial. Vous pouvez les transférer à une autre personne — voici comment, sans
-        jamais compromettre votre sécurité.
+        non-custodial. Vous pouvez les transmettre à une autre personne de trois façons — voici
+        laquelle choisir, et comment, sans jamais compromettre votre sécurité.
       </p>
+
+      {/* Les 3 méthodes de transmission */}
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold text-ink">Les 3 façons de transmettre un token</h2>
+        <div className="mt-4 space-y-4">
+          <Method
+            n={1}
+            emoji="✉️"
+            title="Donner l'accès au compte (e-mail)"
+            tone="À éviter"
+            toneKind="danger"
+          >
+            La méthode la plus rudimentaire : partager l&apos;adresse e-mail du compte pour que
+            l&apos;autre personne s&apos;y connecte. <strong>Déconseillé</strong> : cela revient à
+            donner l&apos;accès à <em>tout</em> votre compte (elle doit aussi accéder à votre boîte
+            mail pour recevoir les codes), ce n&apos;est ni propre ni sûr, et vous perdez l&apos;accès.
+            À réserver, éventuellement, au cas où vous cédez la totalité d&apos;un compte que vous
+            n&apos;utilisez plus.
+          </Method>
+
+          <Method n={2} emoji="🎁" title="Offrir en cadeau (code de réclamation)" tone="Recommandé pour offrir" toneKind="success">
+            Idéal pour offrir à quelqu&apos;un qui <strong>n&apos;a pas encore de compte</strong>. À
+            l&apos;achat, cochez «&nbsp;Offrir en cadeau&nbsp;» : l&apos;action est achetée et
+            couverte, mais <strong>aucun token n&apos;est créé tout de suite</strong>. Vous recevez
+            un <strong>lien avec un code</strong> à transmettre. Le destinataire ouvre le lien, crée
+            son compte (un wallet sécurisé est généré automatiquement), saisit le code — et le{" "}
+            <strong>token est émis directement dans SON wallet</strong>. Il renseigne ensuite sa
+            propre adresse de livraison.{" "}
+            <Link href="/redeem" className="font-medium text-accent hover:underline">
+              Page de réclamation →
+            </Link>
+          </Method>
+
+          <Method n={3} emoji="🔗" title="Transfert on-chain (Coinbase, MetaMask…)" tone="Entre wallets" toneKind="info">
+            Pour transférer un token que vous détenez déjà vers le wallet d&apos;une autre personne
+            (qui a, elle aussi, une adresse). Vous envoyez <strong>l&apos;actif</strong> vers son
+            adresse publique — <strong>jamais votre clé privée</strong>. Détails et étapes dans la
+            section ci-dessous.
+          </Method>
+        </div>
+      </section>
 
       {/* Question principale */}
       <Card className="mt-8 p-6 sm:p-8">
@@ -171,6 +212,41 @@ export default function SupportPage() {
         spécifique.
       </p>
     </div>
+  );
+}
+
+function Method({
+  n,
+  emoji,
+  title,
+  tone,
+  toneKind,
+  children,
+}: {
+  n: number;
+  emoji: string;
+  title: string;
+  tone: string;
+  toneKind: "danger" | "success" | "info";
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-ink/10 bg-cream text-xl">
+          {emoji}
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold text-ink">
+              {n}. {title}
+            </h3>
+            <Badge tone={toneKind}>{tone}</Badge>
+          </div>
+          <p className="mt-1 text-sm leading-relaxed text-ink-soft">{children}</p>
+        </div>
+      </div>
+    </Card>
   );
 }
 

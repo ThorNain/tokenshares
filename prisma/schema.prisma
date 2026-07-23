@@ -145,6 +145,19 @@ model Order {
   transferredOffchain Boolean @default(false)
   transferredToAddress String?
   transferredAt        DateTime?
+
+  // --- Cadeau (mint différé, réclamation par code) ---
+  // Commande « cadeau » : l'action est achetée/couverte mais AUCUN token n'est
+  // émis tant que le destinataire n'a pas saisi le code de réclamation. Le mint
+  // se fait alors dans le wallet du destinataire.
+  isGift             Boolean @default(false)
+  // Code de réclamation (bearer, comme un code de carte cadeau). Null tant que
+  // la couverture n'est pas exécutée.
+  redeemCode         String?  @unique
+  redeemedByUserId   String?
+  redeemedAt         DateTime?
+  // Acheteur d'origine (conservé après réattribution de userId au destinataire).
+  giftPurchaserUserId String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

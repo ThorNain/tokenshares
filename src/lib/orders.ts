@@ -31,9 +31,10 @@ export async function createOrder(params: {
   userId: string;
   ticker: string;
   quantity: number;
+  isGift?: boolean;
   actor: Actor;
 }) {
-  const { userId, ticker, quantity, actor } = params;
+  const { userId, ticker, quantity, isGift, actor } = params;
 
   if (await areOrdersPaused()) {
     throw new OrderError(
@@ -85,6 +86,7 @@ export async function createOrder(params: {
         publicId: generateOrderPublicId(),
         userId,
         status: "created",
+        isGift: isGift ?? false,
         currency: EURO_CURRENCY,
         subtotalAmount: line.subtotal,
         marginRate,
@@ -172,6 +174,34 @@ export async function upsertShippingAddress(params: {
 }
 
 /**
+ * Active/désactive le statut « cadeau » d'une commande. Autorisé uniquement
+ * avant le paiement (le mode de fulfillment en dépend).
+ */
+export async function setOrderGift(params: {
+  orderId: string;
+  userId: string;
+  isGift: boolean;
+  actor: Actor;
+}): Promise<void> {
+  const order = await prisma.order.findUnique({ where: { id: params.orderId } });
+  if (!order || order.userId !== params.userId) {
+    throw new OrderError("Commande introuvable.", 404);
+  }
+  if (!["created", "pending_payment"].includes(order.status)) {
+    throw new OrderError("L'option cadeau n'est plus modifiable.", 409);
+  }
+  await prisma.order.update({ where: { id: order.id }, data: { isGift: params.isGift } });
+  await audit({
+    actor: params.actor,
+    action: "order_gift_toggled",
+    entityType: "Order",
+    entityId: order.id,
+    orderId: order.id,
+    newValue: String(params.isGift),
+  });
+}
+
+/**
  * Initie le paiement : crée/actualise le Payment, passe la commande en
  * `pending_payment` et retourne l'URL de la page de paiement (Stripe
  * Checkout en mode test, ou page simulée locale).
@@ -195,7 +225,9 @@ export async function initiatePayment(params: {
   if (order.payment?.status === "succeeded") {
     throw new OrderError("Cette commande est déjà payée.", 409);
   }
-  if (!order.shippingAddress) {
+  // Pour un cadeau, l'adresse est fournie plus tard par le destinataire lors
+  // de la réclamation : elle n'est donc pas requise au paiement.
+  if (!order.isGift && !order.shippingAddress) {
     throw new OrderError("Veuillez renseigner l'adresse de livraison avant le paiement.", 400);
   }
 

@@ -46,6 +46,9 @@ export function Footer() {
               <Link href="/dashboard/orders" className="block text-ink-soft hover:text-ink">
                 Commandes
               </Link>
+              <Link href="/redeem" className="block text-ink-soft hover:text-ink">
+                Réclamer un cadeau
+              </Link>
             </div>
           </div>
         </div>

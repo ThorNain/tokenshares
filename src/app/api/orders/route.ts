@@ -12,6 +12,7 @@ import { logError, safeErrorMessage } from "@/lib/error-log";
 const bodySchema = z.object({
   ticker: z.string().min(1).max(20),
   quantity: z.number().int().min(1).max(100),
+  isGift: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
       userId: session.userId,
       ticker: parsed.data.ticker,
       quantity: parsed.data.quantity,
+      isGift: parsed.data.isGift,
       actor: { type: "user", id: session.userId, email: session.email },
     });
     return NextResponse.json({ ok: true, orderId: order.id, publicId: order.publicId });

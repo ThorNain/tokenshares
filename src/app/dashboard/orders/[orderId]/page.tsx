@@ -13,11 +13,13 @@ import { qrPngDataUrl } from "@/lib/qr";
 import { isRealChain } from "@/lib/providers/blockchain";
 import { OrderTimeline } from "@/components/order-timeline";
 import { AddressForm } from "@/components/address-form";
+import { RedeemLink } from "@/components/redeem-link";
 import { Alert, Card } from "@/components/ui";
 import { OrderStatusBadge } from "@/components/status-badge";
 import { formatMoney, formatPercent, formatDateTime, shortHex, explorerTxUrl } from "@/lib/utils";
 import { IconDownload, IconExternal } from "@/components/icons";
 import { Totem } from "@/components/totem";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +60,13 @@ export default async function OrderTrackingPage({ params }: { params: { orderId:
         </div>
         <p className="text-sm text-ink-muted">{formatDateTime(order.createdAt)}</p>
       </div>
+
+      {order.isGift && order.redeemCode && !order.redeemedByUserId ? (
+        <RedeemLink url={`${env.appUrl}/redeem?code=${encodeURIComponent(order.redeemCode)}`} />
+      ) : null}
+      {order.isGift && order.redeemedByUserId ? (
+        <Alert tone="success">Ce cadeau a été réclamé : le token a été émis dans le wallet du destinataire.</Alert>
+      ) : null}
 
       <div className="grid gap-8 lg:grid-cols-[1fr,380px]">
         <div className="space-y-8">

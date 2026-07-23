@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { AddressForm } from "@/components/address-form";
 import { PayButton } from "@/components/pay-button";
+import { GiftToggle } from "@/components/gift-toggle";
 import { Totem } from "@/components/totem";
 import { Alert, Card } from "@/components/ui";
 import { formatMoney, formatPercent } from "@/lib/utils";
@@ -65,17 +66,30 @@ export default async function CheckoutPage({
       ) : null}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr,380px]">
-        <Card className="p-6">
-          <h2 className="font-semibold text-ink">Adresse de livraison</h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            Votre objet de collection
-            {item.asset.totemName ? ` — ${item.asset.totemName} —` : " (avec QR code)"} sera
-            expédié à cette adresse. Modifiable jusqu&apos;à l&apos;expédition.
-          </p>
-          <div className="mt-6">
-            <AddressForm orderId={order.id} initial={order.shippingAddress} />
-          </div>
-        </Card>
+        <div className="space-y-6">
+          <GiftToggle orderId={order.id} initial={order.isGift} />
+
+          <Card className="p-6">
+            <h2 className="font-semibold text-ink">Adresse de livraison</h2>
+            {order.isGift ? (
+              <Alert tone="info" className="mt-3">
+                Cadeau : c&apos;est le destinataire qui renseignera son adresse de livraison au
+                moment de réclamer le token. Vous pouvez payer sans saisir d&apos;adresse.
+              </Alert>
+            ) : (
+              <>
+                <p className="mt-1 text-sm text-ink-muted">
+                  Votre objet de collection
+                  {item.asset.totemName ? ` — ${item.asset.totemName} —` : " (avec QR code)"} sera
+                  expédié à cette adresse. Modifiable jusqu&apos;à l&apos;expédition.
+                </p>
+                <div className="mt-6">
+                  <AddressForm orderId={order.id} initial={order.shippingAddress} />
+                </div>
+              </>
+            )}
+          </Card>
+        </div>
 
         <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           <Card className="p-6">
@@ -120,7 +134,7 @@ export default async function CheckoutPage({
             </dl>
           </Card>
 
-          <PayButton orderId={order.id} disabled={!order.shippingAddress} />
+          <PayButton orderId={order.id} disabled={!order.isGift && !order.shippingAddress} />
 
           <p className="text-xs leading-relaxed text-ink-muted">
             Le prix affiché comprend le prix indicatif de l&apos;actif simulé ainsi qu&apos;une
