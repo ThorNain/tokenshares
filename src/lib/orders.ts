@@ -237,16 +237,31 @@ export async function initiatePayment(params: {
   const provider = getPaymentProvider();
   const description = `${item.quantity} × Token de démonstration ${item.asset.name} (${item.asset.ticker}) — commande ${order.publicId}`;
 
-  const session = await provider.createCheckoutSession({
-    orderId: order.id,
-    orderPublicId: order.publicId,
-    amount: order.totalAmount,
-    currency: order.currency,
-    customerEmail: params.userEmail,
-    description,
-    successUrl: `${env.appUrl}/checkout/${order.id}/confirmation`,
-    cancelUrl: `${env.appUrl}/checkout/${order.id}?cancelled=1`,
-  });
+  // Réutilise la session de paiement en attente plutôt que d'en créer une
+  // nouvelle à chaque tentative (l'utilisateur peut rouvrir la page de
+  // paiement) : évite d'orphaner des sessions Stripe et le risque de double
+  // encaissement si plusieurs sessions ouvertes coexistent pour une commande.
+  let session: Awaited<ReturnType<typeof provider.createCheckoutSession>> | null = null;
+  if (
+    order.payment?.status === "pending" &&
+    order.payment.provider === provider.name &&
+    order.payment.stripeSessionId &&
+    order.payment.amount === order.totalAmount
+  ) {
+    session = await provider.reuseCheckoutSession(order.payment.stripeSessionId);
+  }
+  if (!session) {
+    session = await provider.createCheckoutSession({
+      orderId: order.id,
+      orderPublicId: order.publicId,
+      amount: order.totalAmount,
+      currency: order.currency,
+      customerEmail: params.userEmail,
+      description,
+      successUrl: `${env.appUrl}/checkout/${order.id}/confirmation`,
+      cancelUrl: `${env.appUrl}/checkout/${order.id}?cancelled=1`,
+    });
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.payment.upsert({

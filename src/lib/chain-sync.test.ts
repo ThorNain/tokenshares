@@ -17,9 +17,17 @@ describe("selectOrdersToTransfer (imputation FIFO d'un transfert on-chain)", () 
     expect(selectOrdersToTransfer(orders, 3)).toEqual({ orderIds: ["a", "b"], remaining: 0 });
   });
 
+  it("glouton : saute une commande trop grande mais continue à balayer", () => {
+    // 2 : couvre a(1), b(2) ne rentre pas dans le reste (1), mais c(1) oui.
+    expect(selectOrdersToTransfer(orders, 2)).toEqual({ orderIds: ["a", "c"], remaining: 0 });
+  });
+
   it("ne coupe jamais une commande en deux (pas de transfert partiel)", () => {
-    // 2 : couvre a(1) puis il reste 1, insuffisant pour b(2) → on s'arrête.
-    expect(selectOrdersToTransfer(orders, 2)).toEqual({ orderIds: ["a"], remaining: 1 });
+    // Une seule commande de 5, transfert de 3 : rien n'est imputé (pas de split).
+    expect(selectOrdersToTransfer([{ id: "x", quantity: 5 }], 3)).toEqual({
+      orderIds: [],
+      remaining: 3,
+    });
   });
 
   it("impute toutes les commandes si le montant les couvre toutes", () => {

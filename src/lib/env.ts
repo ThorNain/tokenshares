@@ -18,8 +18,12 @@ export const env = {
   },
   get sessionSecret(): string {
     const v = process.env.SESSION_SECRET;
+    if (v) return v;
+    // Repli en clair UNIQUEMENT en dev local. Sur tout autre environnement
+    // (staging/preview) sans SESSION_SECRET, on refuse : sinon le secret public
+    // (présent dans les sources) permettrait de forger un cookie admin.
     if (process.env.NODE_ENV === "production") return required("SESSION_SECRET", v);
-    return v ?? "dev-only-secret-change-me-4f8a2c1e9b7d6035";
+    return "dev-only-secret-change-me-4f8a2c1e9b7d6035";
   },
   /** Mode démonstration : active les simulations manuelles dans l'admin. */
   get demoMode(): boolean {

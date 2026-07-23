@@ -130,5 +130,7 @@ export async function getSellableQuantity(userId: string, assetId: string): Prom
       _sum: { quantity: true },
     }),
   ]);
-  return (minted._sum.quantity ?? 0) - (sold._sum.quantity ?? 0);
+  // Jamais négatif : après remboursement d'une commande déjà mintée, la part
+  // « détenue » sort du total sans retirer les ventes déjà comptées.
+  return Math.max(0, (minted._sum.quantity ?? 0) - (sold._sum.quantity ?? 0));
 }

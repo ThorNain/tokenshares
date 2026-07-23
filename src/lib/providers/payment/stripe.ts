@@ -70,6 +70,22 @@ export class StripePaymentProvider implements PaymentProvider {
     return { provider: this.name, sessionId: session.id, url: session.url };
   }
 
+  async reuseCheckoutSession(sessionId: string): Promise<CheckoutSessionResult | null> {
+    try {
+      const stripe = getStripeClient();
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      // Réutilisable uniquement si la session est encore ouverte (ni payée, ni
+      // expirée) et possède une URL. Sinon on laisse l'appelant en créer une
+      // nouvelle — évite d'orphaner des sessions et le double encaissement.
+      if (session.status === "open" && session.url) {
+        return { provider: this.name, sessionId: session.id, url: session.url };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   async refund(params: RefundParams): Promise<RefundResult> {
     try {
       const stripe = getStripeClient();

@@ -9,7 +9,13 @@ export type CsvColumn<T> = {
 
 function escapeCell(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined) return "";
-  const s = String(value);
+  let s = String(value);
+  // Anti-injection de formule : un tableur (Excel/LibreOffice) interprète une
+  // cellule commençant par = + - @ (ou tab/CR) comme une formule. On la
+  // neutralise en la préfixant d'une apostrophe. Cf. OWASP « CSV Injection ».
+  if (/^[=+\-@\t\r]/.test(s)) {
+    s = `'${s}`;
+  }
   if (/[";\n\r]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`;
   }

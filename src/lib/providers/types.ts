@@ -107,6 +107,13 @@ export interface RefundResult {
 export interface PaymentProvider {
   readonly name: string;
   createCheckoutSession(params: CreateCheckoutParams): Promise<CheckoutSessionResult>;
+  /**
+   * Retourne une session de paiement ENCORE utilisable pour `sessionId`, ou
+   * `null` si elle est absente, expirée ou déjà réglée (il faut alors en
+   * ouvrir une nouvelle). Permet de ré-afficher la même page de paiement sans
+   * multiplier les sessions (et donc les intentions d'encaissement) Stripe.
+   */
+  reuseCheckoutSession(sessionId: string): Promise<CheckoutSessionResult | null>;
   refund(params: RefundParams): Promise<RefundResult>;
 }
 

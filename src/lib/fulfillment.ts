@@ -21,7 +21,10 @@ import { generateOrderPublicId, generatePublicToken, generateClaimCode } from "@
 import { getBrokerProvider } from "@/lib/providers/broker";
 import { getBlockchainProvider } from "@/lib/providers/blockchain";
 import { getShippingProvider } from "@/lib/providers/shipping/mock";
-import { getSellableQuantity } from "@/lib/portfolio";
+import { getSellableQuantity, TOKEN_HELD_STATUSES } from "@/lib/portfolio";
+
+/** Statuts d'un ordre de vente qui « engagent » (réservent) des tokens. */
+const SELL_COMMITTED_STATUSES = ["pending_broker", "sold_pending_burn", "burning", "completed"];
 
 export class FulfillmentError extends Error {
   constructor(
@@ -38,31 +41,12 @@ export class FulfillmentError extends Error {
 // ---------------------------------------------------------------------------
 
 /**
- * Enregistre un événement externe. Retourne false si l'événement a déjà été
- * traité (contrainte d'unicité en base = protection contre les doubles
- * émissions, section 6 du cahier des charges).
+ * L'idempotence des événements webhook (contrainte d'unicité sur WebhookEvent)
+ * est désormais réservée DANS la même transaction que la mise à jour du
+ * paiement (cf. markPaymentSucceeded / markPaymentFailed), afin qu'un
+ * événement ne puisse jamais être « consommé » sans que son effet soit
+ * appliqué — section 6 du cahier des charges.
  */
-async function claimWebhookEvent(params: {
-  provider: string;
-  externalId: string;
-  type: string;
-  orderId?: string;
-}): Promise<boolean> {
-  try {
-    await prisma.webhookEvent.create({
-      data: {
-        provider: params.provider,
-        externalId: params.externalId,
-        type: params.type,
-        orderId: params.orderId ?? null,
-      },
-    });
-    return true;
-  } catch {
-    // Violation d'unicité → événement déjà traité.
-    return false;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Paiement
@@ -80,57 +64,77 @@ export async function markPaymentSucceeded(params: {
 }): Promise<{ alreadyProcessed: boolean }> {
   const actor = params.actor ?? SYSTEM_ACTOR;
 
-  const isNew = await claimWebhookEvent({
-    provider: params.provider,
-    externalId: params.externalEventId,
-    type: "payment_succeeded",
-    orderId: params.orderId,
-  });
-  if (!isNew) return { alreadyProcessed: true };
+  // Réservation de l'événement + confirmation du paiement dans UNE SEULE
+  // transaction : soit tout est validé, soit rien. Ainsi un crash entre la
+  // réservation et la mise à jour ne peut pas « consommer » l'événement sans
+  // appliquer le paiement (perte silencieuse d'une confirmation Stripe).
+  let paymentIdForAudit: string | null = null;
+  let oldPaymentStatus: string | null = null;
+  let applied = false;
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.webhookEvent.create({
+        data: {
+          provider: params.provider,
+          externalId: params.externalEventId,
+          type: "payment_succeeded",
+          orderId: params.orderId ?? null,
+        },
+      });
 
-  const order = await prisma.order.findUnique({
-    where: { id: params.orderId },
-    include: { payment: true },
-  });
-  if (!order || !order.payment) {
-    throw new FulfillmentError(`Commande ou paiement introuvable : ${params.orderId}`, 404);
-  }
-  if (order.payment.status === "succeeded") {
-    return { alreadyProcessed: true };
+      const order = await tx.order.findUnique({
+        where: { id: params.orderId },
+        include: { payment: true },
+      });
+      if (!order || !order.payment) {
+        throw new FulfillmentError(`Commande ou paiement introuvable : ${params.orderId}`, 404);
+      }
+      paymentIdForAudit = order.payment.id;
+      oldPaymentStatus = order.payment.status;
+
+      // Paiement déjà confirmé par un précédent événement : on n'applique rien
+      // (l'événement courant est tout de même consommé, c'est idempotent).
+      if (order.payment.status === "succeeded") return;
+
+      const now = new Date();
+      await tx.payment.update({
+        where: { orderId: order.id },
+        data: {
+          status: "succeeded",
+          paidAt: now,
+          amountReceived: params.amountReceived ?? order.payment.amount,
+          method: params.method ?? null,
+          stripePaymentIntentId: params.stripePaymentIntentId ?? order.payment.stripePaymentIntentId,
+          webhookVerified: params.webhookVerified,
+          failureMessage: null,
+        },
+      });
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: "paid", paidAt: now },
+      });
+      applied = true;
+    });
+  } catch (error) {
+    // Unicité webhookEvent → événement déjà traité : rollback complet.
+    if ((error as { code?: string }).code === "P2002") return { alreadyProcessed: true };
+    throw error;
   }
 
-  const now = new Date();
-  await prisma.$transaction(async (tx) => {
-    await tx.payment.update({
-      where: { orderId: order.id },
-      data: {
-        status: "succeeded",
-        paidAt: now,
-        amountReceived: params.amountReceived ?? order.payment!.amount,
-        method: params.method ?? null,
-        stripePaymentIntentId: params.stripePaymentIntentId ?? order.payment!.stripePaymentIntentId,
-        webhookVerified: params.webhookVerified,
-        failureMessage: null,
-      },
-    });
-    await tx.order.update({
-      where: { id: order.id },
-      data: { status: "paid", paidAt: now },
-    });
-  });
+  if (!applied) return { alreadyProcessed: true };
 
   await audit({
     actor,
     action: "payment_confirmed",
     entityType: "Payment",
-    entityId: order.payment.id,
-    orderId: order.id,
-    oldValue: order.payment.status,
+    entityId: paymentIdForAudit!,
+    orderId: params.orderId,
+    oldValue: oldPaymentStatus,
     newValue: "succeeded",
   });
 
   // Poursuite automatique du pipeline (chaque étape gère ses propres erreurs).
-  await advancePipeline(order.id, actor);
+  await advancePipeline(params.orderId, actor);
   return { alreadyProcessed: false };
 }
 
@@ -141,27 +145,42 @@ export async function markPaymentFailed(params: {
   reason: string;
   actor?: Actor;
 }): Promise<{ alreadyProcessed: boolean }> {
-  const isNew = await claimWebhookEvent({
-    provider: params.provider,
-    externalId: params.externalEventId,
-    type: "payment_failed",
-    orderId: params.orderId,
-  });
-  if (!isNew) return { alreadyProcessed: true };
+  // Réservation de l'événement + passage en échec dans la MÊME transaction
+  // (atomicité webhook/paiement, cf. markPaymentSucceeded).
+  let paymentIdForAudit: string | null = null;
+  let applied = false;
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.webhookEvent.create({
+        data: {
+          provider: params.provider,
+          externalId: params.externalEventId,
+          type: "payment_failed",
+          orderId: params.orderId ?? null,
+        },
+      });
+      const payment = await tx.payment.findUnique({ where: { orderId: params.orderId } });
+      // Un paiement déjà confirmé n'est jamais rétrogradé en échec.
+      if (!payment || payment.status === "succeeded") return;
+      paymentIdForAudit = payment.id;
+      await tx.payment.update({
+        where: { orderId: params.orderId },
+        data: { status: "failed", failureMessage: params.reason, webhookVerified: true },
+      });
+      applied = true;
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code === "P2002") return { alreadyProcessed: true };
+    throw error;
+  }
 
-  const payment = await prisma.payment.findUnique({ where: { orderId: params.orderId } });
-  if (!payment || payment.status === "succeeded") return { alreadyProcessed: true };
-
-  await prisma.payment.update({
-    where: { orderId: params.orderId },
-    data: { status: "failed", failureMessage: params.reason, webhookVerified: true },
-  });
+  if (!applied) return { alreadyProcessed: true };
 
   await audit({
     actor: params.actor ?? SYSTEM_ACTOR,
     action: "payment_failed",
     entityType: "Payment",
-    entityId: payment.id,
+    entityId: paymentIdForAudit!,
     orderId: params.orderId,
     newValue: params.reason,
   });
@@ -234,7 +253,7 @@ export async function redeemGift(params: {
 }): Promise<{ ok: boolean; orderId?: string; error?: string }> {
   const order = await prisma.order.findUnique({
     where: { redeemCode: params.code },
-    include: { hedgingOrder: true, user: { include: { wallets: true } } },
+    include: { hedgingOrder: true },
   });
   if (!order || !order.isGift) {
     return { ok: false, error: "Code de réclamation invalide." };
@@ -254,10 +273,13 @@ export async function redeemGift(params: {
     return { ok: false, error: "Aucun wallet disponible pour recevoir le token." };
   }
 
-  // Réattribution au destinataire (le portefeuille et le certificat suivent
-  // `userId`). L'acheteur d'origine est conservé pour l'historique.
-  await prisma.order.update({
-    where: { id: order.id },
+  // Réclamation ATOMIQUE (le portefeuille et le certificat suivent `userId`).
+  // Seule la PREMIÈRE requête dont `redeemedByUserId` est encore NULL réussit :
+  // updateMany conditionnel = « UPDATE … WHERE redeemedByUserId IS NULL ». Deux
+  // réclamations simultanées ne peuvent donc jamais émettre deux tokens.
+  // L'acheteur d'origine est conservé pour l'historique.
+  const claim = await prisma.order.updateMany({
+    where: { id: order.id, isGift: true, redeemedByUserId: null },
     data: {
       userId: redeemer.id,
       giftPurchaserUserId: order.giftPurchaserUserId ?? order.userId,
@@ -266,6 +288,9 @@ export async function redeemGift(params: {
       status: "hedge_simulated",
     },
   });
+  if (claim.count === 0) {
+    return { ok: false, error: "Ce cadeau a déjà été réclamé." };
+  }
   await audit({
     actor: params.actor,
     action: "gift_redeemed",
@@ -510,26 +535,44 @@ export async function runMint(
   }
 
   const chain = getBlockchainProvider();
-  // Clé d'idempotence dérivée de la commande : la contrainte UNIQUE en base
-  // garantit qu'un même paiement ne peut jamais provoquer deux émissions.
   const idempotencyKey = `mint:${order.id}`;
 
-  const mint = await prisma.tokenMint.upsert({
-    where: { idempotencyKey },
-    create: {
-      orderId: order.id,
-      assetId: item.assetId,
-      tokenId: item.asset.tokenId,
-      contractAddress: chain.contractAddress,
-      network: chain.network,
-      quantity: item.quantity,
-      toAddress: wallet.address,
-      status: "minting",
-      attempts: 1,
-      idempotencyKey,
-    },
-    update: { status: "minting", attempts: { increment: 1 }, lastError: null },
+  // Réservation ATOMIQUE du mint (protège contre le double-mint sous
+  // concurrence : webhook + clic admin, double-clic, redeem simultané…).
+  // 1) on garantit l'existence de la ligne (idempotent) au statut « queued » ;
+  //    une création concurrente lève P2002 et est ignorée ;
+  try {
+    await prisma.tokenMint.create({
+      data: {
+        orderId: order.id,
+        assetId: item.assetId,
+        tokenId: item.asset.tokenId,
+        contractAddress: chain.contractAddress,
+        network: chain.network,
+        quantity: item.quantity,
+        toAddress: wallet.address,
+        status: "queued",
+        attempts: 0,
+        idempotencyKey,
+      },
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code !== "P2002") throw error;
+  }
+
+  // 2) une SEULE exécution fait passer un statut réclamable → « minting »
+  //    (updateMany = UPDATE SQL atomique). Les autres obtiennent count = 0.
+  const claim = await prisma.tokenMint.updateMany({
+    where: { idempotencyKey, status: { in: ["not_started", "queued", "failed"] } },
+    data: { status: "minting", attempts: { increment: 1 }, lastError: null },
   });
+  if (claim.count === 0) {
+    const current = await prisma.tokenMint.findUnique({ where: { idempotencyKey } });
+    if (current?.status === "transfer_confirmed") return { ok: true, alreadyDone: true };
+    return { ok: false, error: "Une émission est déjà en cours pour cette commande." };
+  }
+  const mint = await prisma.tokenMint.findUnique({ where: { idempotencyKey } });
+  if (!mint) throw new FulfillmentError("Émission introuvable après réservation.", 500);
 
   await prisma.order.update({ where: { id: order.id }, data: { status: "mint_pending" } });
 
@@ -916,6 +959,7 @@ export async function cancelPendingOperation(params: {
   actor: Actor;
   justification?: string;
 }): Promise<void> {
+  let entityId: string;
   if (params.target === "hedging") {
     const hedging = await prisma.hedgingOrder.findUnique({ where: { orderId: params.orderId } });
     if (!hedging || hedging.status === "simulated_filled") {
@@ -925,19 +969,22 @@ export async function cancelPendingOperation(params: {
       where: { id: hedging.id },
       data: { status: "cancelled" },
     });
+    entityId = hedging.id;
   } else {
     const mint = await prisma.tokenMint.findUnique({ where: { orderId: params.orderId } });
     if (!mint || mint.status === "transfer_confirmed") {
       throw new FulfillmentError("Aucune émission annulable pour cette commande.", 409);
     }
     await prisma.tokenMint.update({ where: { id: mint.id }, data: { status: "cancelled" } });
+    entityId = mint.id;
   }
 
   await audit({
     actor: params.actor,
     action: `${params.target}_cancelled`,
     entityType: params.target === "hedging" ? "HedgingOrder" : "TokenMint",
-    entityId: params.orderId,
+    // id de l'entité concernée (et non l'orderId) pour une piste d'audit exacte.
+    entityId,
     orderId: params.orderId,
     justification: params.justification ?? null,
   });
@@ -1001,6 +1048,47 @@ export async function requestSell(params: {
       idempotencyKey: `burn:${generatePublicToken()}`,
     },
   });
+
+  // Anti sur-vente (course entre deux ventes simultanées) : la vérification
+  // getSellableQuantity ci-dessus n'est PAS atomique avec la création. On
+  // réserve donc de façon optimiste — l'ordre est créé — puis on recompte le
+  // cumul réellement engagé face aux tokens détenus. En FIFO (par date de
+  // création), tout ordre au-delà du budget est en excédent ; si le nôtre en
+  // fait partie, il cède sa place (les autres ventes concurrentes gardent la
+  // leur). Aucun double-comptage ne peut ainsi vendre deux fois le même token.
+  const [mintedAgg, committed] = await Promise.all([
+    prisma.tokenMint.aggregate({
+      where: {
+        assetId: asset.id,
+        status: "transfer_confirmed",
+        order: { userId: params.userId, status: { in: TOKEN_HELD_STATUSES }, transferredOffchain: false },
+      },
+      _sum: { quantity: true },
+    }),
+    prisma.sellOrder.findMany({
+      where: { userId: params.userId, assetId: asset.id, status: { in: SELL_COMMITTED_STATUSES } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, quantity: true },
+    }),
+  ]);
+  let budget = mintedAgg._sum.quantity ?? 0;
+  const keep = new Set<string>();
+  for (const o of committed) {
+    if (o.quantity <= budget) {
+      keep.add(o.id);
+      budget -= o.quantity;
+    }
+  }
+  if (!keep.has(sellOrder.id)) {
+    await prisma.sellOrder.update({
+      where: { id: sellOrder.id },
+      data: { status: "cancelled", lastError: "Vente concurrente : quantité détenue insuffisante." },
+    });
+    throw new FulfillmentError(
+      `Quantité insuffisante pour vendre ${params.quantity} token(s) de ${asset.ticker} (vente concurrente détectée). Réessayez.`,
+      409,
+    );
+  }
 
   await audit({
     actor: params.actor,

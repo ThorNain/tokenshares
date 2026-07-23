@@ -27,6 +27,13 @@ export class MockPaymentProvider implements PaymentProvider {
     };
   }
 
+  async reuseCheckoutSession(sessionId: string): Promise<CheckoutSessionResult | null> {
+    // La page de paiement simulée est déterministe (résout la commande via
+    // stripeSessionId) : une session en attente est donc toujours réutilisable.
+    if (!sessionId.startsWith("mock_cs_")) return null;
+    return { provider: this.name, sessionId, url: `/mock-checkout/${sessionId}` };
+  }
+
   async refund(params: RefundParams): Promise<RefundResult> {
     void params;
     return { ok: true, refundId: simulatedRef("mock_re") };

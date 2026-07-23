@@ -8,7 +8,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/session-token";
 
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-only-secret-change-me-4f8a2c1e9b7d6035";
+// Secret de vérification des cookies. En dev local, repli stable pour que la
+// connexion fonctionne sans configuration. Sur tout autre environnement sans
+// SESSION_SECRET, on utilise un secret ALÉATOIRE (donc inconnu) : les cookies
+// ne se valident jamais (échec fermé) plutôt que d'accepter un secret public
+// qui permettrait de forger un cookie admin.
+const SESSION_SECRET =
+  process.env.SESSION_SECRET ??
+  (process.env.NODE_ENV === "development"
+    ? "dev-only-secret-change-me-4f8a2c1e9b7d6035"
+    : crypto.randomUUID());
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

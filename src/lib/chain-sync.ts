@@ -68,11 +68,12 @@ export function selectOrdersToTransfer(
   let remaining = amount;
   const orderIds: string[] = [];
   for (const order of orders) {
-    if (remaining >= order.quantity && order.quantity > 0) {
+    if (remaining <= 0) break;
+    // Glouton : on saute une commande trop grande pour la quantité restante
+    // mais on continue à balayer (une commande plus petite peut correspondre).
+    if (order.quantity > 0 && remaining >= order.quantity) {
       orderIds.push(order.id);
       remaining -= order.quantity;
-    } else {
-      break;
     }
   }
   return { orderIds, remaining };
