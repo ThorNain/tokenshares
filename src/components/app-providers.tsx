@@ -18,8 +18,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId={PRIVY_APP_ID}
       config={{
-        // « passkey » peut être ajouté si la version du SDK Privy installée
-        // le propose (Dashboard Privy → Login methods).
+        // Connexion par e-mail (code à usage unique). Le passkey (reconnexion
+        // instantanée sans code) nécessite dans cette version du SDK une
+        // intégration dédiée (useLoginWithPasskey) + activation dashboard.
         loginMethods: ["email"],
         embeddedWallets: {
           // Wallet créé automatiquement à la première connexion.

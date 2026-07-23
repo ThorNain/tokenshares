@@ -33,3 +33,7 @@ contracts/typechain-types/
 
 # Fichier d'accès rapide privé (contient des identifiants — jamais versionné)
 ACCES-RAPIDE.txt
+
+# Fichiers parasites hors projet (cache PowerShell, notes locales)
+Microsoft/
+Note.txt

@@ -52,8 +52,15 @@ function PrivyLoginPanel() {
         const embedded = wallets.find((wallet) => wallet.walletClientType === "privy");
         // Filet de sécurité pour un ancien compte Privy ou une création
         // automatique qui n'aurait pas été appliquée lors d'une session passée.
+        // On ignore l'erreur « wallet déjà existant » : Privy peut l'avoir créé
+        // automatiquement (createOnLogin) juste avant que la liste soit à jour.
         if (!embedded) {
-          await createWallet();
+          try {
+            await createWallet();
+          } catch (walletError) {
+            const msg = walletError instanceof Error ? walletError.message : "";
+            if (!/already|exist/i.test(msg)) throw walletError;
+          }
         }
 
         const accessToken = await getAccessToken();
