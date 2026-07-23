@@ -4,9 +4,10 @@
  */
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { getBlockchainProvider } from "@/lib/providers/blockchain";
-import { Card, TableWrap, Table, TH, TD } from "@/components/ui";
+import { getBlockchainProvider, isRealChain } from "@/lib/providers/blockchain";
+import { Card, TableWrap, Table, TH, TD, Badge, Alert } from "@/components/ui";
 import { TxStatusBadge } from "@/components/status-badge";
+import { ChainSyncButton } from "@/components/admin/chain-sync-button";
 import { formatDateTime, shortHex } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,17 @@ export default async function AdminBlockchainPage() {
   const totalFees = feeSum.reduce((acc, t) => acc + BigInt(t.feeWei ?? "0"), 0n);
   const totalTx = await prisma.blockchainTransaction.count();
 
+  // Transferts « externes » détectés par l'indexeur (hors plateforme) + état de sync.
+  const [externalTransfers, lastSynced] = await Promise.all([
+    prisma.chainTransfer.findMany({
+      where: { kind: "transfer" },
+      orderBy: { blockNumber: "desc" },
+      take: 50,
+    }),
+    prisma.setting.findUnique({ where: { key: "chain_last_synced_block" } }),
+  ]);
+  const realChain = isRealChain();
+
   const stats = [
     { label: "Réseau", value: chain.network },
     { label: "Contrat ERC-1155", value: shortHex(chain.contractAddress, 8) },
@@ -62,7 +74,17 @@ export default async function AdminBlockchainPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-ink">Blockchain & tokens</h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-ink">Blockchain & tokens</h2>
+          <p className="text-sm text-ink-muted">
+            {realChain
+              ? `Indexation active · dernier bloc synchronisé : ${lastSynced?.value ?? "—"}`
+              : "Blockchain simulée : l'indexation on-chain est inactive."}
+          </p>
+        </div>
+        {realChain ? <ChainSyncButton /> : null}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         {stats.map((s) => (
@@ -72,6 +94,58 @@ export default async function AdminBlockchainPage() {
           </Card>
         ))}
       </div>
+
+      {/* Transferts externes détectés (hors plateforme) */}
+      {realChain ? (
+        <section>
+          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-muted">
+            Transferts détectés hors plateforme
+          </h3>
+          {externalTransfers.length === 0 ? (
+            <Alert tone="info">
+              Aucun transfert externe détecté. Les transferts de tokens réalisés en dehors du site
+              (Coinbase Wallet, MetaMask…) apparaîtront ici après synchronisation.
+            </Alert>
+          ) : (
+            <TableWrap>
+              <Table>
+                <thead>
+                  <tr>
+                    <TH>Bloc</TH>
+                    <TH>De</TH>
+                    <TH>Vers</TH>
+                    <TH className="text-right">Token</TH>
+                    <TH className="text-right">Qté</TH>
+                    <TH>Hash</TH>
+                    <TH>Réconciliation</TH>
+                  </tr>
+                </thead>
+                <tbody>
+                  {externalTransfers.map((t) => (
+                    <tr key={t.id} className="hover:bg-cream/60">
+                      <TD className="tabular text-xs">{t.blockNumber}</TD>
+                      <TD className="font-mono text-[10px]">{shortHex(t.fromAddress, 6)}</TD>
+                      <TD className="font-mono text-[10px]">{shortHex(t.toAddress, 6)}</TD>
+                      <TD className="text-right tabular text-xs">#{t.tokenId}</TD>
+                      <TD className="text-right tabular text-xs">{t.amount}</TD>
+                      <TD className="font-mono text-[10px]">{shortHex(t.txHash, 6)}</TD>
+                      <TD>
+                        {t.processed ? (
+                          <Badge tone="success" title={t.note ?? undefined}>
+                            ● Traité
+                          </Badge>
+                        ) : (
+                          <Badge tone="pending">● En attente</Badge>
+                        )}
+                      </TD>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </TableWrap>
+          )}
+        </section>
+      ) : null}
 
       <TableWrap>
         <Table>

@@ -138,6 +138,13 @@ model Order {
   internalNote String?
   paidAt       DateTime?
   refundedAt   DateTime?
+  // Token transféré hors plateforme (détecté par l'indexeur on-chain) vers une
+  // adresse qui n'appartient à aucun compte connu. La commande est alors
+  // retirée du portefeuille du vendeur et le certificat l'indique. Si le
+  // destinataire EST un compte connu, on réattribue plutôt `userId` (pas ce flag).
+  transferredOffchain Boolean @default(false)
+  transferredToAddress String?
+  transferredAt        DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -382,6 +389,37 @@ model BlockchainTransaction {
 
   @@index([status])
   @@index([orderId])
+}
+
+// --- Indexation on-chain ------------------------------------------------------
+
+// Événement de transfert ERC-1155 observé sur la blockchain (indexeur). Sert à
+// réconcilier la propriété applicative avec la vérité on-chain quand un token
+// est transféré HORS de la plateforme (Coinbase Wallet, MetaMask…).
+model ChainTransfer {
+  id          String @id @default(cuid())
+  network     String
+  txHash      String
+  logIndex    Int
+  blockNumber Int
+  // "mint" (from = 0x0) | "burn" (to = 0x0) | "transfer" (entre deux adresses)
+  kind        String
+  fromAddress String
+  toAddress   String
+  tokenId     Int
+  amount      Int
+  // Réconciliation effectuée (propriété applicative mise à jour) ?
+  processed   Boolean   @default(false)
+  processedAt DateTime?
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  // Un même événement (tx + index de log + token) n'est indexé qu'une fois.
+  // Le tokenId est inclus car un log TransferBatch porte plusieurs tokens.
+  @@unique([txHash, logIndex, tokenId])
+  @@index([kind, processed])
+  @@index([fromAddress])
+  @@index([toAddress])
 }
 
 // --- Objet physique & QR code -------------------------------------------------

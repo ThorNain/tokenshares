@@ -87,7 +87,10 @@ export default async function ClaimPage({ params }: { params: { code: string } }
   }
 
   const mint = order.tokenMint;
-  const tokenLive = TOKEN_HELD.includes(order.status) && mint?.status === "transfer_confirmed";
+  const tokenLive =
+    TOKEN_HELD.includes(order.status) &&
+    mint?.status === "transfer_confirmed" &&
+    !order.transferredOffchain;
   const realChain = isRealChain();
 
   return (
@@ -153,6 +156,13 @@ export default async function ClaimPage({ params }: { params: { code: string } }
                 <span className="text-sm text-ink-muted">Statut</span>
                 <OrderStatusBadge status={order.status} />
               </div>
+
+              {order.transferredOffchain ? (
+                <Alert tone="warning" className="mt-4">
+                  Ce token a été <strong>transféré</strong> vers un wallet externe à la plateforme.
+                  Il n&apos;est plus détenu par le compte d&apos;origine.
+                </Alert>
+              ) : null}
 
               {/* Preuve on-chain */}
               {tokenLive && mint?.txHash ? (

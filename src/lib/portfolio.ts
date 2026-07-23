@@ -41,6 +41,8 @@ export async function getPortfolio(userId: string): Promise<PortfolioSummary> {
       userId,
       status: { in: TOKEN_HELD_STATUSES },
       tokenMint: { status: "transfer_confirmed" },
+      // Exclut les tokens transférés hors plateforme (détectés par l'indexeur).
+      transferredOffchain: false,
     },
     include: { items: { include: { asset: true } } },
   });
@@ -115,7 +117,7 @@ export async function getSellableQuantity(userId: string, assetId: string): Prom
       where: {
         assetId,
         status: "transfer_confirmed",
-        order: { userId, status: { in: TOKEN_HELD_STATUSES } },
+        order: { userId, status: { in: TOKEN_HELD_STATUSES }, transferredOffchain: false },
       },
       _sum: { quantity: true },
     }),
