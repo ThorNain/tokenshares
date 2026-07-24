@@ -15,7 +15,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
  *
  *         CE TOKEN N'EST PAS UNE ACTION. Il ne confere aucun droit de
  *         propriete, de vote ou de dividende sur une entreprise cotee, et ne
- *         constitue pas un instrument financier. Reseau de test uniquement.
+ *         constitue pas un instrument financier.
  *
  * @dev    Base exclusivement sur OpenZeppelin 5.x (aucune cryptographie
  *         maison) : ERC1155 + Supply (suivi des quantites emises par actif,
@@ -28,7 +28,7 @@ contract DemoEquityToken is ERC1155, ERC1155Supply, ERC1155Pausable, AccessContr
 
     /// @notice Avertissement permanent, lisible on-chain.
     string public constant DISCLAIMER =
-        "Demo token - not a share, not a financial instrument, no ownership rights. Testnet only.";
+        "Demo token - not a share, not a financial instrument, no ownership rights.";
 
     string public constant name = "Demo Tokenized Equities";
     string public constant symbol = "dEQT";

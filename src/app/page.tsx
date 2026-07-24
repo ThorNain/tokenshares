@@ -17,7 +17,7 @@ export default async function HomePage() {
       {/* Héro */}
       <section className="py-16 text-center sm:py-24">
         <p className="mx-auto mb-4 w-fit rounded-full border border-ink/10 bg-surface px-4 py-1 text-xs font-medium text-ink-muted">
-          Prototype de démonstration — aucun investissement réel
+          Tokens numériques indexés sur des actions cotées
         </p>
         <h1 className="mx-auto max-w-3xl text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
           Un token numérique, indexé sur une action cotée.

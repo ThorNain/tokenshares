@@ -1,14 +1,15 @@
 /**
- * Fournisseur blockchain RÉEL (testnet EVM uniquement) via viem.
- * Réseaux supportés : Base Sepolia (84532, recommandé) et Ethereum Sepolia
- * (11155111). Le wallet « minter » (MINTER_PRIVATE_KEY) est un wallet
- * opérationnel de l'entreprise sur testnet — ce n'est JAMAIS une clé
- * d'utilisateur, et il ne doit détenir aucun fonds réel.
+ * Fournisseur blockchain RÉEL (EVM) via viem.
+ * Réseaux supportés : Base mainnet (8453), Base Sepolia (84532) et Ethereum
+ * Sepolia (11155111). Le wallet « minter » (MINTER_PRIVATE_KEY) est un wallet
+ * opérationnel de l'entreprise — ce n'est JAMAIS une clé d'utilisateur. Sur
+ * mainnet il détient de vrais fonds (ETH pour le gas) : clé dédiée, jamais
+ * réutilisée, stockée hors du dépôt.
  */
 import "server-only";
 import { createPublicClient, createWalletClient, http, parseAbi, type Chain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { baseSepolia, sepolia } from "viem/chains";
+import { base, baseSepolia, sepolia } from "viem/chains";
 import { env } from "@/lib/env";
 import type {
   BlockchainProvider,
@@ -24,10 +25,11 @@ const CONTRACT_ABI = parseAbi([
 ]);
 
 function resolveChain(chainId: number): Chain {
+  if (chainId === 8453) return base;
   if (chainId === 84532) return baseSepolia;
   if (chainId === 11155111) return sepolia;
   throw new Error(
-    `CHAIN_ID ${chainId} non supporté. Utilisez 84532 (Base Sepolia) ou 11155111 (Sepolia).`,
+    `CHAIN_ID ${chainId} non supporté. Utilisez 8453 (Base mainnet), 84532 (Base Sepolia) ou 11155111 (Sepolia).`,
   );
 }
 

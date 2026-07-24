@@ -9,8 +9,9 @@ import { getMarginRate, getEffectiveMarginRate } from "@/lib/settings";
 import { calculateSellingPrice, roundCurrency } from "@/lib/pricing";
 import type { CatalogAsset } from "@/components/asset-catalog";
 import { convertToEuro, EURO_CURRENCY } from "@/lib/fx";
+import { unstable_cache } from "next/cache";
 
-export async function getCatalog(limit?: number): Promise<CatalogAsset[]> {
+async function computeCatalog(limit?: number): Promise<CatalogAsset[]> {
   const assets = await prisma.asset.findMany({
     where: { active: true },
     orderBy: [{ indexName: "asc" }, { name: "asc" }],
@@ -43,6 +44,17 @@ export async function getCatalog(limit?: number): Promise<CatalogAsset[]> {
     };
   });
 }
+
+/**
+ * Catalogue mis en cache 60 s (cache de données Next, partagé entre requêtes et
+ * instances serverless) : évite de refaire les requêtes DB + l'appel marché à
+ * chaque navigation. Une modification admin (marge, activation d'un actif) peut
+ * mettre jusqu'à 60 s à se refléter sur les pages publiques.
+ */
+export const getCatalog = unstable_cache(computeCatalog, ["catalog"], {
+  revalidate: 60,
+  tags: ["catalog"],
+});
 
 export async function getAssetDetail(ticker: string) {
   const asset = await prisma.asset.findUnique({ where: { ticker } });

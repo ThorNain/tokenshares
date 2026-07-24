@@ -15,9 +15,6 @@ export async function Navbar() {
         <div className="flex items-center gap-8">
           <Link href="/" className="text-lg font-semibold tracking-tight text-ink">
             TokenShares
-            <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
-              Démo
-            </span>
           </Link>
           <div className="hidden items-center gap-6 text-sm text-ink-soft sm:flex">
             <Link href="/assets" className="hover:text-ink">

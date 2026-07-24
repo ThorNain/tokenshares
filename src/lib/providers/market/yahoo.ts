@@ -104,7 +104,10 @@ export class YahooMarketDataProvider implements MarketDataProvider {
     const response = await fetch(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      cache: "no-store",
+      // Cache de données Next (partagé entre requêtes/instances serverless) :
+      // au plus un appel Yahoo par ticker toutes les 60 s. Les cours sont de
+      // toute façon différés ~15 min, donc 60 s de fraîcheur suffit largement.
+      next: { revalidate: 60 },
     });
     if (!response.ok) {
       throw new Error(`Yahoo Finance HTTP ${response.status} pour ${ticker}`);

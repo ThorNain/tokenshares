@@ -9,12 +9,11 @@ export function Footer() {
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div className="max-w-md">
-            <p className="text-sm font-semibold text-ink">TokenShares (démo)</p>
+            <p className="text-sm font-semibold text-ink">TokenShares</p>
             <p className="mt-2 text-xs leading-relaxed text-ink-muted">
-              Prototype de démonstration. Les tokens émis sur la blockchain de test ne constituent
-              ni une action, ni un instrument financier, ni un droit de propriété sur une
-              entreprise cotée. Aucune action réelle n&apos;est achetée, aucun paiement réel
-              n&apos;est encaissé.
+              Les tokens émis (ERC-1155) sont indexés à titre informatif sur le cours d&apos;actions
+              cotées. Ils ne constituent ni une action, ni un instrument financier, ni un droit de
+              propriété sur une entreprise cotée, et ne confèrent aucun dividende ni droit de vote.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-8 text-sm">
@@ -53,7 +52,7 @@ export function Footer() {
           </div>
         </div>
         <p className="mt-8 border-t border-ink/5 pt-6 text-center text-xs text-ink-muted">
-          © 2026 TokenShares — environnement de démonstration uniquement.
+          © 2026 TokenShares
         </p>
       </div>
     </footer>
