@@ -1,13 +1,17 @@
 /**
- * Navigation principale (composant serveur : lit la session).
+ * Navigation principale (composant serveur : lit la session et la langue).
  */
 import Link from "next/link";
 import { getSession } from "@/lib/session";
+import { getLocale, getDictionary } from "@/lib/i18n";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 export async function Navbar() {
   const session = await getSession();
+  const locale = getLocale();
+  const t = getDictionary(locale).nav;
 
   return (
     <header className="sticky top-0 z-40 border-b border-ink/10 bg-surface/90 backdrop-blur">
@@ -18,14 +22,15 @@ export async function Navbar() {
           </Link>
           <div className="hidden items-center gap-6 text-sm text-ink-soft sm:flex">
             <Link href="/assets" className="hover:text-ink">
-              Actifs
+              {t.assets}
             </Link>
             <Link href="/risk-disclosure" className="hover:text-ink">
-              Risques
+              {t.risks}
             </Link>
           </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
+          <LanguageSwitcher current={locale} label={t.language} />
           <ThemeToggle />
           {session ? (
             <>
@@ -34,14 +39,14 @@ export async function Navbar() {
                   href="/admin"
                   className="rounded-full border border-ink/15 px-4 py-1.5 font-medium text-ink hover:bg-ink/5"
                 >
-                  Administration
+                  {t.admin}
                 </Link>
               ) : null}
               <Link
                 href="/dashboard/portfolio"
                 className="rounded-full bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-hover"
               >
-                Mon espace
+                {t.myAccount}
               </Link>
               <LogoutButton />
             </>
@@ -50,7 +55,7 @@ export async function Navbar() {
               href="/login"
               className="rounded-full bg-accent px-4 py-1.5 font-medium text-white hover:bg-accent-hover"
             >
-              Se connecter
+              {t.login}
             </Link>
           )}
         </div>

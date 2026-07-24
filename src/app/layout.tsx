@@ -9,6 +9,7 @@ import { AppProviders } from "@/components/app-providers";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { ThemeScript } from "@/components/theme";
+import { getLocale } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: {
@@ -26,8 +27,9 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = getLocale();
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <body className="flex min-h-screen flex-col">
         {/* Applique le thème avant le premier rendu (aucun flash). */}
         <ThemeScript />
